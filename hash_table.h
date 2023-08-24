@@ -188,7 +188,7 @@
         t->_data      = malloc(new_data_size);                                               \
         memset(t->_data, 0, new_data_size);                                                  \
                                                                                              \
-        for (int i = 0; i < old_size; i += 1) {                                              \
+        for (unsigned i = 0; i < old_size; i += 1) {                                         \
             slot_ptr = old_data + i;                                                         \
             next = *slot_ptr;                                                                \
             while ((slot = next)) {                                                          \
@@ -305,7 +305,7 @@
     }                                                                                        \
                                                                                              \
     static inline void CAT2(hash_table(K_T, V_T), _free)(hash_table(K_T, V_T) t) {           \
-        for (int i = 0; i < t->prime_sizes[t->_size_idx]; i += 1) {                          \
+        for (unsigned i = 0; i < t->prime_sizes[t->_size_idx]; i += 1) {                     \
             hash_table_slot(K_T, V_T) next, slot = t->_data[i];                              \
             while (slot != NULL) {                                                           \
                 next = slot->_next;                                                          \
