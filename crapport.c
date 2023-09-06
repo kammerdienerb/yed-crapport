@@ -17,6 +17,9 @@
 #include <yed/syntax.h>
 #undef DBG
 
+#include "tge.h"
+#undef DBG
+
 #define THREADPOOL_IMPLEMENTATION
 #include "threadpool.h"
 
@@ -103,19 +106,68 @@ typedef struct {
     Value_Table props;
 } Experiment;
 
+enum {
+    PLOT_SCATTER = 0,
+    PLOT_LINE,
+    PLOT_BAR,
+};
 
+typedef struct {
+    char    *title;
+    double   xmin;
+    double   xmax;
+    double   ymin;
+    double   ymax;
+    int      xmarks;
+    int      ymarks;
+    array_t  groups;
+    int      type;
+    int      height;
+    int      width;
+    double   axis_pad;
+    int      invert_labels;
+    int      point_labels;
+    u32      fg;
+    u32      bg;
+    int      appearx;
+    int      appeary;
+} Plot;
+
+#define POINT_COLOR_NOT_SET (0xffffffff)
+
+typedef struct {
+    array_t  points;
+    u32      color;
+    double   size;
+    char    *label;
+    double   labelx;
+    double   labely;
+} Plot_Point_Group;
+
+typedef struct {
+    double x;
+    double y;
+} Plot_Point;
+
+static yed_plugin       *Self;
 static array_t           experiments;
+static array_t           experiments_working;
 static pthread_mutex_t   experiments_lock = PTHREAD_MUTEX_INITIALIZER;
 static Experiment        layout;
 static tp_t             *tp;
 static int               loading;
 static yed_syntax        syn;
+static TGE_Game         *tge;
+static Jule_Interp       interp;
+static pthread_mutex_t   jule_lock = PTHREAD_MUTEX_INITIALIZER;
 static int               jule_dirty;
 static u64               jule_dirty_time_ms;
-static int               jule_running;
 static int               jule_finished;
 static array_t           jule_output_chars;
 static u64               jule_start_time_ms;
+static int               jule_abort;
+static array_t           jule_table_ids;
+static array_t           jule_plots;
 
 static void init_exp(Experiment *exp) {
     exp->props = hash_table_make_e(Str, Value, str_hash, str_equ);
@@ -159,13 +211,6 @@ static void free_all(void) {
 
     tp = NULL;
     pthread_mutex_unlock(&experiments_lock);
-}
-
-static void unload(yed_plugin *self) {
-    (void)self;
-    free_all();
-    yed_free_buffer(yed_get_or_create_special_rdonly_buffer(BUFFER_NAME));
-    yed_syntax_free(&syn);
 }
 
 static Str get_crapport_dir(void) {
@@ -294,13 +339,19 @@ static void *load_monitor_thr(void *arg) {
     tp_wait(tp);
 
     pthread_mutex_lock(&experiments_lock);
+
+    array_clear(experiments_working);
+
     i      = 0;
     v.type = NUMBER;
     array_traverse(experiments, it) {
         v.number = (double)i;
         hash_table_insert(it->props, strdup("ID"), v);
         i += 1;
+
+        array_push(experiments_working, *it);
     }
+
     pthread_mutex_unlock(&experiments_lock);
 
     loading = 0;
@@ -367,7 +418,8 @@ static void crapport_load(int n_args, char **args) {
     pthread_mutex_lock(&experiments_lock);
 
     DBG("creating experiment table");
-    experiments = array_make(Experiment);
+    experiments         = array_make(Experiment);
+    experiments_working = array_make(Experiment);
     DBG("spinning up threadpool");
     tp          = tp_make(MAX(1, platform_get_num_hw_threads() - 1));
 
@@ -853,7 +905,7 @@ static void update_buffer(void) {
     free_exp(&layout);
     init_exp(&layout);
 
-    array_traverse(experiments, it) {
+    array_traverse(experiments_working, it) {
         hash_table_traverse(it->props, key, val) {
             new_val.type   = NUMBER;
             new_val.number = MAX(strlen(key), value_width(val));
@@ -885,13 +937,13 @@ static void update_buffer(void) {
     col  = 2;
 
     sorted_experiments = array_make(Experiment);
-    array_copy(sorted_experiments, experiments);
+    array_copy(sorted_experiments, experiments_working);
 
     array_rtraverse(keys, key_it) {
         sort_key  = *key_it;
         sort_type = -1;
 
-        array_traverse(experiments, it) {
+        array_traverse(experiments_working, it) {
             val = hash_table_get_val(it->props, sort_key);
             if (val == NULL) { continue; }
 
@@ -958,6 +1010,8 @@ out_reset_rdonly:;
 
 #define JULE_MAX_OUTPUT_LEN (64000)
 
+FILE *f;
+
 static void jule_output_cb(const char *s, int n_bytes) {
     int         len;
     array_t     old;
@@ -976,14 +1030,11 @@ static void jule_output_cb(const char *s, int n_bytes) {
 }
 
 static Jule_Status jule_eval_cb(Jule_Value *value) {
-    u64         now;
     const char *message;
 
     (void)value;
 
-    now = measure_time_now_ms();
-
-    if (now - jule_start_time_ms > 2500) {
+    if (unlikely(jule_abort)) {
         message = "crapport: TIMEOUT\n";
         jule_output_cb(message, strlen(message));
         return JULE_ERR_EVAL_CANCELLED;
@@ -1001,6 +1052,12 @@ static void jule_error_cb(Jule_Error_Info *info) {
 
     snprintf(buff, sizeof(buff), "Jule Error: %s\n", jule_error_string(status));
     jule_output_cb(buff, strlen(buff));
+
+    if (info->file != NULL) {
+        snprintf(buff, sizeof(buff), "    FILE:   %s\n", info->file);
+        jule_output_cb(buff, strlen(buff));
+    }
+
     switch (status) {
         case JULE_ERR_UNEXPECTED_EOS:
         case JULE_ERR_UNEXPECTED_TOK:
@@ -1014,6 +1071,7 @@ static void jule_error_cb(Jule_Error_Info *info) {
     }
     switch (status) {
         case JULE_ERR_LOOKUP:
+        case JULE_ERR_RELEASE_WHILE_BORROWED:
             snprintf(buff, sizeof(buff), "    SYMBOL: %s\n", info->sym);
             jule_output_cb(buff, strlen(buff));
             break;
@@ -1045,6 +1103,12 @@ static void jule_error_cb(Jule_Error_Info *info) {
             jule_output_cb(buff, strlen(buff));
             JULE_FREE(s);
             break;
+        case JULE_ERR_FILE_NOT_FOUND:
+        case JULE_ERR_FILE_IS_DIR:
+        case JULE_ERR_MMAP_FAILED:
+            snprintf(buff, sizeof(buff), "    PATH:   %s\n", info->path);
+            jule_output_cb(buff, strlen(buff));
+            break;
         default:
             break;
     }
@@ -1059,7 +1123,7 @@ static void on_jule_update(void) {
 
 static char *j_columns_str;
 
-static Jule_Status j_columns(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+static Jule_Status j_display_columns(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
     Jule_Status  status;
     array_t      chars;
     Jule_Value  *v;
@@ -1112,12 +1176,302 @@ out:;
 }
 
 static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    (void)interp;
-    (void)tree;
-    (void)values;
+    Jule_Status          status;
+    Jule_Value          *expr;
+    Jule_Value          *table;
+    array_t              delete_rows;
+    unsigned long long   idx;
+    Jule_Value          *row;
+    Jule_Value          *expr_result;
+    int                  keep_row;
+    Jule_Value         **it;
+
+    status = jule_args(interp, tree, "-*", values, &expr);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    table = jule_lookup(interp, "@TABLE");
+    if (table == NULL) {
+        status = JULE_ERR_LOOKUP;
+        jule_make_lookup_error(interp, tree->line, "@TABLE");
+        *result = NULL;
+        goto out;
+    }
+
+    if (table->type != JULE_LIST) { goto out; }
+
+    delete_rows = array_make(Jule_Value*);
+
+    JULE_BORROW(table);
+
+    idx = 0;
+    FOR_EACH(&table->list, row) {
+        JULE_BORROWER(row);
+
+        row->in_symtab = 1;
+
+        jule_install_var(interp, "@ROW", row);
+        status = jule_eval(interp, expr, &expr_result);
+        if (status != JULE_SUCCESS) {
+            JULE_UNBORROWER(row);
+            jule_uninstall_var_no_free(interp, "@ROW");
+            *result = NULL;
+            goto out_unborrow;
+        }
+        if (expr_result->type != JULE_NUMBER) {
+            status = JULE_ERR_TYPE;
+            JULE_UNBORROWER(row);
+            jule_uninstall_var_no_free(interp, "@ROW");
+            jule_make_type_error(interp, expr->line, JULE_NUMBER, expr_result->type);
+            *result = NULL;
+            goto out_unborrow;
+        }
+        keep_row = expr_result->number != 0;
+        jule_free_value(expr_result);
+        JULE_UNBORROWER(row);
+        jule_uninstall_var_no_free(interp, "@ROW");
+
+        if (!keep_row) {
+            array_push(delete_rows, table->list.data[idx]);
+        }
+
+        idx += 1;
+    }
+
+    array_traverse(delete_rows, it) {
+again:;
+        idx = 0;
+        FOR_EACH(&table->list, row) {
+            if (row == *it) {
+                jule_free_value_force(row);
+                jule_erase(&table->list, idx);
+                goto again;
+            }
+            idx += 1;
+        }
+    }
+
+    *result = table;
+
+out_unborrow:;
+    JULE_UNBORROW(table);
+
+    array_free(delete_rows);
+
+out:;
+    return status;
+}
+
+static Jule_Status j_plot(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status       status;
+    Jule_Value       *object;
+    Plot              plot;
+    Jule_Value       *title;
+    Jule_Value       *type;
+    Jule_Value       *fg;
+    Jule_Value       *bg;
+    Jule_Value       *invert_labels;
+    Jule_Value       *point_labels;
+    Jule_Value       *width;
+    Jule_Value       *height;
+    Jule_Value       *xmin;
+    Jule_Value       *xmax;
+    Jule_Value       *ymin;
+    Jule_Value       *ymax;
+    Jule_Value       *xmarks;
+    Jule_Value       *ymarks;
+    Jule_Value       *appearx;
+    Jule_Value       *appeary;
+    Jule_Value       *groups;
+    Jule_Value       *group;
+    Plot_Point_Group  point_group;
+    Plot_Point        plot_point;
+    Jule_Value       *size;
+    Jule_Value       *label;
+    Jule_Value       *labelx;
+    Jule_Value       *labely;
+    Jule_Value       *color;
+    char             *s;
+    Jule_Value       *points;
+    Jule_Value       *point;
+    Jule_Value       *x;
+    Jule_Value       *y;
+
+    status = jule_args(interp, tree, "o", values, &object);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    memset(&plot, 0, sizeof(plot));
+
+    plot.height   = 64;
+    plot.width    = 64;
+    plot.axis_pad = 0.15;
+
+#define GET_FIELD(_name, _object, _field, _type)                          \
+do {                                                                      \
+    Jule_Value *_key_value = jule_string_value((_field), strlen(_field)); \
+    (_name) = jule_field((_object), _key_value);                          \
+    if ((_name) != NULL) {                                                \
+        if ((_name)->type != (_type)) { (_name) = NULL; }                 \
+    }                                                                     \
+    jule_free_value(_key_value);                                          \
+} while (0)
+
+    GET_FIELD(title, object, "title", JULE_STRING);
+    plot.title = title == NULL
+                    ? strdup("Untitled Plot")
+                    : jule_to_string(title, JULE_NO_QUOTE);
+
+    GET_FIELD(type, object, "type", JULE_STRING);
+    if (type != NULL) {
+             if (type->string.len == strlen("scatter") && strncmp(type->string.chars, "scatter", strlen("scatter")) == 0)
+                { plot.type = PLOT_SCATTER; }
+        else if (type->string.len == strlen("line")    && strncmp(type->string.chars, "line",    strlen("line"))    == 0)
+                { plot.type = PLOT_LINE; }
+        else if (type->string.len == strlen("bar")     && strncmp(type->string.chars, "bar",     strlen("bar"))     == 0)
+                { plot.type = PLOT_BAR; }
+    }
+
+    GET_FIELD(fg,            object, "fg",            JULE_STRING);
+    GET_FIELD(bg,            object, "bg",            JULE_STRING);
+    GET_FIELD(invert_labels, object, "invert-labels", JULE_NUMBER);
+    GET_FIELD(point_labels,  object, "point-labels",  JULE_NUMBER);
+    GET_FIELD(width,         object, "width",         JULE_NUMBER);
+    GET_FIELD(height,        object, "height",        JULE_NUMBER);
+    GET_FIELD(appearx,       object, "appearx",       JULE_NUMBER);
+    GET_FIELD(appeary,       object, "appeary",       JULE_NUMBER);
+    GET_FIELD(xmin,          object, "xmin",          JULE_NUMBER);
+    GET_FIELD(xmax,          object, "xmax",          JULE_NUMBER);
+    GET_FIELD(ymin,          object, "ymin",          JULE_NUMBER);
+    GET_FIELD(ymax,          object, "ymax",          JULE_NUMBER);
+    GET_FIELD(xmarks,        object, "xmarks",        JULE_NUMBER);
+    GET_FIELD(ymarks,        object, "ymarks",        JULE_NUMBER);
+
+    plot.fg = 0;
+    if (fg != NULL && fg->string.len < 32) {
+        s = alloca(fg->string.len + 1);
+        memcpy(s, fg->string.chars, fg->string.len);
+        s[fg->string.len] = 0;
+        sscanf(s + (s[0] == '#'), "%x", &plot.fg);
+    }
+
+    plot.bg = 0xeeeeee;
+    if (bg != NULL && bg->string.len < 32) {
+        s = alloca(bg->string.len + 1);
+        memcpy(s, bg->string.chars, bg->string.len);
+        s[bg->string.len] = 0;
+        sscanf(s + (s[0] == '#'), "%x", &plot.bg);
+    }
+
+    plot.invert_labels = invert_labels != NULL && invert_labels->number != 0;
+    plot.point_labels  = point_labels  != NULL && point_labels->number  != 0;
+
+    plot.width  = width  == NULL ? 0 : width->number;
+    plot.height = height == NULL ? 0 : height->number;
+    if (plot.width  <= 0 || plot.width  > 256) { plot.width  = 64; }
+    if (plot.height <= 0 || plot.height > 256) { plot.height = 64; }
+
+    plot.appearx = appearx == NULL ? 0 : (int)(appearx->number * ys->term_cols);
+    plot.appeary = appeary == NULL ? 0 : (int)(appeary->number * ys->term_rows);
+
+    plot.xmin   = xmin   == NULL ? 0  : xmin->number;
+    plot.xmax   = xmax   == NULL ? 1  : xmax->number;
+    plot.ymin   = ymin   == NULL ? 0  : ymin->number;
+    plot.ymax   = ymax   == NULL ? 1  : ymax->number;
+    plot.xmarks = xmarks == NULL ? 0  : (int)xmarks->number;
+    plot.ymarks = ymarks == NULL ? 10 : (int)ymarks->number;
+
+    plot.groups = array_make(Plot_Point_Group);
+
+    GET_FIELD(groups, object, "groups", JULE_LIST);
+    if (groups != NULL) {
+        FOR_EACH(&groups->list, group) {
+            if (group->type != JULE_OBJECT) { continue; }
+            memset(&point_group, 0, sizeof(point_group));
+
+            point_group.points = array_make(Plot_Point);
+
+            GET_FIELD(size,   group, "size",   JULE_NUMBER);
+            GET_FIELD(label,  group, "label",  JULE_STRING);
+            GET_FIELD(labelx, group, "labelx", JULE_NUMBER);
+            GET_FIELD(labely, group, "labely", JULE_NUMBER);
+            GET_FIELD(color,  group, "color",  JULE_STRING);
+
+            point_group.size   = size   == NULL ? 0    : size->number;
+            point_group.label  = label  == NULL ? NULL : jule_to_string(label, JULE_NO_QUOTE);
+            point_group.labelx = labelx == NULL ? NAN  : labelx->number;
+            point_group.labely = labely == NULL ? NAN  : labely->number;
+
+            point_group.color = POINT_COLOR_NOT_SET;
+            if (color != NULL && color->string.len < 32) {
+                s = alloca(color->string.len + 1);
+                memcpy(s, color->string.chars, color->string.len);
+                s[color->string.len] = 0;
+                sscanf(s + (s[0] == '#'), "%x", &point_group.color);
+            }
+
+            GET_FIELD(points, group, "points", JULE_LIST);
+            if (points != NULL) {
+                FOR_EACH(&points->list, point) {
+                    if (point->type != JULE_OBJECT) { continue; }
+                    memset(&plot_point, 0, sizeof(plot_point));
+
+                    GET_FIELD(x, point, "x", JULE_NUMBER);
+                    GET_FIELD(y, point, "y", JULE_NUMBER);
+
+                    plot_point.x = x == NULL ? 0 : x->number;
+                    plot_point.y = y == NULL ? 0 : y->number;
+
+                    plot.xmin = xmin == NULL ? MIN(plot.xmin, plot_point.x) : plot.xmin;
+                    plot.xmax = xmax == NULL ? MAX(plot.xmax, plot_point.x) : plot.xmax;
+                    plot.ymin = ymin == NULL ? MIN(plot.ymin, plot_point.y) : plot.ymin;
+                    plot.ymax = ymax == NULL ? MAX(plot.ymax, plot_point.y) : plot.ymax;
+
+                    array_push(point_group.points, plot_point);
+                }
+            }
+
+            array_push(plot.groups, point_group);
+        }
+    }
+
+    array_push(jule_plots, plot);
 
     *result = jule_nil_value();
-    return JULE_SUCCESS;
+
+out:;
+    return status;
+}
+
+static Jule_Status j_color(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *s;
+    char         buff[64];
+    yed_attrs    attrs;
+
+    status = jule_args(interp, tree, "s", values, &s);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    snprintf(buff, sizeof(buff), "%.*s", (int)s->string.len, s->string.chars);
+
+    /* @bad I think this is totally not okay to do from this thread... */
+    attrs = yed_parse_attrs(buff);
+
+
+    snprintf(buff, sizeof(buff), "#%06x", attrs.fg);
+
+    *result = jule_string_value(buff, strlen(buff));
+
+out:;
+    return status;
+
 }
 
 static void create_jule_builtins(Jule_Interp *interp) {
@@ -1128,6 +1482,7 @@ static void create_jule_builtins(Jule_Interp *interp) {
     Value      *val;
     Jule_Value *kv;
     Jule_Value *vv;
+    Jule_Value *columns;
 
     table = jule_list_value();
 
@@ -1151,22 +1506,66 @@ static void create_jule_builtins(Jule_Interp *interp) {
 
         jule_push(&table->list, row);
     }
+
+    columns = jule_list_value();
+    if (layout.props != NULL) {
+        hash_table_traverse(layout.props, key, val) {
+            kv = jule_string_value(key, strlen(key));
+            jule_push(&columns->list, kv);
+        }
+    }
+
     pthread_mutex_unlock(&experiments_lock);
 
-    jule_install_var(interp, "@TABLE",   table);
-    jule_install_fn(interp,  "@columns", j_columns);
-    jule_install_fn(interp,  "@filter",  j_filter);
+
+    jule_install_var(interp, "@TABLE",           table);
+    jule_install_var(interp, "@COLUMNS",         columns);
+    jule_install_fn(interp,  "@display-columns", j_display_columns);
+    jule_install_fn(interp,  "@filter",          j_filter);
+    jule_install_fn(interp,  "@plot",            j_plot);
+    jule_install_fn(interp,  "@color",           j_color);
+}
+
+static void *jule_timeout_thread(void *arg) {
+    u64 now;
+
+    (void)arg;
+
+    for (;;) {
+        if (jule_finished) { break; }
+
+        if (pthread_mutex_trylock(&jule_lock) == 0) {
+            pthread_mutex_unlock(&jule_lock);
+            break;
+        }
+
+        usleep(100000);
+
+        now = measure_time_now_ms();
+
+        if (now - jule_start_time_ms > 2500) {
+            jule_abort = 1;
+            break;
+        }
+    }
+
+    return NULL;
 }
 
 static void *jule_thread(void *arg) {
     char        *code;
-    Jule_Interp  interp;
     Jule_Status  status;
 
     code = arg;
 
     array_free(jule_output_chars);
     jule_output_chars = array_make_with_cap(char, JULE_MAX_OUTPUT_LEN);
+
+    array_free(jule_table_ids);
+    jule_table_ids = array_make(int);
+
+    array_free(jule_plots);
+    jule_plots = array_make(Plot);
 
     jule_init_interp(&interp);
     jule_set_error_callback(&interp,  jule_error_cb);
@@ -1186,11 +1585,8 @@ static void *jule_thread(void *arg) {
     snprintf(buff, sizeof(buff), "took %llu ms", end - start);
     jule_output_cb(buff, strlen(buff));
 
-    jule_free(&interp);
-
     free(code);
 
-    jule_running  = 0;
     jule_finished = 1;
 
     yed_force_update();
@@ -1204,10 +1600,12 @@ static void update_jule(void) {
     yed_buffer *buff;
     char       *code;
 
-    if (jule_running) { return; }
-
     if ((name = yed_get_var("crapport-jule-file")) != NULL) {
         if ((buff = yed_get_buffer(name)) != NULL) {
+
+            if (pthread_mutex_trylock(&jule_lock) != 0) { return; }
+            pthread_mutex_unlock(&jule_lock);
+
             DBG("starting Jule interpreter");
 
             code = yed_get_buffer_text(buff);
@@ -1217,10 +1615,12 @@ static void update_jule(void) {
             yed_buff_clear_no_undo(buff);
             buff->flags |= BUFF_RD_ONLY;
 
-            jule_running       = 1;
             jule_finished      = 0;
+            jule_abort         = 0;
             jule_start_time_ms = measure_time_now_ms();
             pthread_create(&t, NULL, jule_thread, code);
+            pthread_detach(t);
+            pthread_create(&t, NULL, jule_timeout_thread, code);
             pthread_detach(t);
             yed_force_update();
         }
@@ -1229,9 +1629,72 @@ static void update_jule(void) {
     jule_dirty = 0;
 }
 
+static void tge_plots(void);
+
+static void after_jule(void) {
+    yed_buffer *b;
+    Jule_Value *table;
+    Jule_Value *ID_str;
+    Jule_Value *row;
+    Jule_Value *ID_val;
+    int         idx;
+    Experiment *exp_p;
+
+    b = yed_get_or_create_special_rdonly_buffer("*crapport-jule-output");
+
+    b->flags &= ~BUFF_RD_ONLY;
+    yed_buff_clear_no_undo(b);
+    array_zero_term(jule_output_chars);
+    yed_buff_insert_string_no_undo(b, array_data(jule_output_chars), 1, 1);
+    array_clear(jule_output_chars);
+    b->flags |= BUFF_RD_ONLY;
+
+    pthread_mutex_lock(&experiments_lock);
+
+    array_clear(experiments_working);
+
+    table = jule_lookup(&interp, "@TABLE");
+    if (table == NULL)            { goto out_unlock; }
+    if (table->type != JULE_LIST) { goto out_unlock; }
+
+    ID_str = jule_string_value("ID", 2);
+
+    FOR_EACH(&table->list, row) {
+        if (row == NULL)              { continue; }
+        if (row->type != JULE_OBJECT) { continue; }
+
+        ID_val = jule_field(row, ID_str);
+        if (ID_val == NULL)              { continue; }
+        if (ID_val->type != JULE_NUMBER) { continue; }
+
+        idx = (int)ID_val->number;
+        if (idx < 0 || idx >= array_len(experiments)) { continue; }
+
+        exp_p = array_item(experiments, idx);
+        array_push(experiments_working, *exp_p);
+    }
+
+    jule_free_value(ID_str);
+
+out_unlock:;
+    pthread_mutex_unlock(&experiments_lock);
+
+    if (j_columns_str != NULL) {
+        /* Setting this will update the buffer. Don't want to do it twice. */
+        yed_set_var("crapport-columns", j_columns_str);
+    } else {
+        update_buffer();
+    }
+
+    tge_plots();
+
+    jule_free(&interp);
+
+    pthread_mutex_unlock(&jule_lock);
+}
+
 static void epump(yed_event *event) {
     u64         now;
-    yed_buffer *b;
 
     if (jule_dirty) {
         now = measure_time_now_ms();
@@ -1239,19 +1702,7 @@ static void epump(yed_event *event) {
             update_jule();
         }
     } else if (jule_finished) {
-        b = yed_get_or_create_special_rdonly_buffer("*crapport-jule-output");
-
-        b->flags &= ~BUFF_RD_ONLY;
-        yed_buff_clear_no_undo(b);
-        array_zero_term(jule_output_chars);
-        yed_buff_insert_string_no_undo(b, array_data(jule_output_chars), 1, 1);
-        array_clear(jule_output_chars);
-        b->flags |= BUFF_RD_ONLY;
-
-        if (j_columns_str != NULL) {
-            yed_set_var("crapport-columns", j_columns_str);
-        }
-
+        after_jule();
         jule_finished = 0;
     }
 
@@ -1341,7 +1792,9 @@ static void ebuffmod(yed_event *event) {
 
     if (event->buffer == NULL) { return; }
 
-    if ((jule = yed_get_var("crapport-jule-file")) && strcmp(event->buffer->name, jule) == 0) {
+    if ((jule = yed_get_var("crapport-jule-file"))
+    &&  strcmp(event->buffer->name, jule) == 0
+    &&  yed_var_is_truthy("crapport-jule-live-update")) {
         on_jule_update();
     }
 
@@ -1409,6 +1862,287 @@ static int complete_columns(char *string, yed_completion_results *results) {
     return status;
 }
 
+
+static void free_plot(Plot *plot) {
+    Plot_Point_Group *group;
+
+    free(plot->title);
+    array_traverse(plot->groups, group) {
+        if (group->label != NULL) {
+            free(group->label);
+        }
+        array_free(group->points);
+    }
+}
+
+static void tge_frame(TGE_Game *tge);
+static void teardown_tge(void);
+
+#define TO_SCREEN_X(_x) \
+    ((plot->width - inner_screen_width) + (int)(((_x) / plot_width) * inner_screen_width))
+#define TO_SCREEN_Y(_y) \
+    (plot->height - (plot->height - inner_screen_height) - (int)(((_y) / plot_height) * inner_screen_height))
+#define IABS(_i) ((_i) < 0 ? -(_i) : (_i))
+
+static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *group, int idx) {
+    TGE_Canvas_Widget *canvas;
+    TGE_Screen        *screen;
+    double             plot_width;
+    double             plot_height;
+    int                inner_screen_width;
+    int                inner_screen_height;
+    int                min_screen_x;
+    int                x_axis_x;
+    int                y_axis_y;
+    int                screen_size;
+    Plot_Point        *last_point;
+    Plot_Point        *point;
+    int                screen_x;
+    int                screen_y;
+    int                x0;
+    int                y0;
+    int                x1;
+    int                y1;
+    int                dx;
+    int                dy;
+    int                N;
+    float              divN;
+    float              xstep;
+    float              ystep;
+    float              xf;
+    float              yf;
+    int                step;
+    int                x;
+    int                y;
+    char               buff[128];
+
+    canvas              = widget->data;
+    screen              = &canvas->screen;
+    plot_width          = plot->xmax - plot->xmin;
+    plot_height         = plot->ymax - plot->ymin;
+    inner_screen_width  = (int)((1.0 - plot->axis_pad) * plot->width);
+    inner_screen_height = (int)((1.0 - plot->axis_pad) * plot->height);
+    min_screen_x        = inner_screen_width;
+    x_axis_x            = (int)(plot->axis_pad * plot->width);
+    y_axis_y            = plot->height - (int)(plot->axis_pad * plot->height);
+    screen_size         = MAX(1, (int)((group->size / plot_width) * inner_screen_width));
+
+    if (inner_screen_height <= 0 || inner_screen_width <= 0) { return; }
+
+    if (group->color == POINT_COLOR_NOT_SET) {
+        group->color = plot->fg;
+    }
+
+    last_point = NULL;
+    array_traverse(group->points, point) {
+        screen_x = TO_SCREEN_X(point->x);
+        screen_y = TO_SCREEN_Y(point->y);
+
+        if (screen_y < 0 || screen_x < 0) { break; }
+
+        min_screen_x = MIN(min_screen_x, screen_x);
+
+        if (plot->point_labels) {
+            snprintf(buff, sizeof(buff), "%.3g", point->y);
+            tge_canvas_widget_add_label(widget, screen_x - (strlen(buff) / 2), screen_y - 2, buff, plot->fg, -1);
+        }
+
+        switch (plot->type) {
+            case PLOT_SCATTER:
+                if (screen_x != x_axis_x && screen_y != y_axis_y) {
+                    tge_screen_set_pixel(screen, screen_x, screen_y, group->color);
+                }
+                break;
+            case PLOT_LINE:
+                if (last_point != NULL) {
+                    x0   = TO_SCREEN_X(last_point->x);
+                    y0   = TO_SCREEN_Y(last_point->y);
+                    x1   = screen_x;
+                    y1   = screen_y;
+                    dx   = x1 - x0;
+                    dy   = y1 - y0;
+                    N    = MAX(IABS(dx), IABS(dy));
+                    divN = N == 0 ? 0.0 : 1.0 / N;
+                    xstep = dx * divN;
+                    ystep = dy * divN;
+                    xf    = x0;
+                    yf    = y0;
+
+                    for (step = 0; step <= N; step += 1, xf += xstep, yf += ystep) {
+                        screen_x = (int)round(xf);
+                        screen_y = (int)round(yf);
+
+                        if (screen_x != x_axis_x && screen_y != y_axis_y) {
+                            tge_screen_set_pixel(screen, screen_x, screen_y, group->color);
+                        }
+                    }
+
+                } else {
+                    if (screen_x != x_axis_x && screen_y != y_axis_y) {
+                        tge_screen_set_pixel(screen, screen_x, screen_y, group->color);
+                    }
+                }
+                break;
+            case PLOT_BAR:
+                for (y = inner_screen_height - (inner_screen_height == y_axis_y); y >= screen_y; y -= 1) {
+                    for (x = 0; x < screen_size; x += 1) {
+                        tge_screen_set_pixel(screen, screen_x - (screen_size / 2) + x, y, group->color);
+                    }
+                }
+                break;
+        }
+
+        last_point = point;
+    }
+
+    if (group->label != NULL) {
+        screen_x = isnan(group->labelx)
+                        ? min_screen_x
+                        : TO_SCREEN_X(group->labelx);
+        screen_y = isnan(group->labely)
+                        ? inner_screen_height + 4 + ((idx & 1) * 2)
+                        : TO_SCREEN_Y(group->labely);
+
+        if (plot->type == PLOT_BAR && idx & 1 && isnan(group->labely)) {
+            tge_canvas_widget_add_label(widget, screen_x, screen_y - 2, "|", group->color, -1);
+        }
+        tge_canvas_widget_add_label(widget,
+                                    screen_x - (strlen(group->label) / 2),
+                                    screen_y,
+                                    group->label,
+                                    plot->invert_labels ? plot->bg     : group->color,
+                                    plot->invert_labels ? group->color : plot->bg);
+    }
+}
+
+static void tge_plots(void) {
+    Plot              *plot;
+    TGE_Widget        *widget;
+    TGE_Canvas_Widget *canvas;
+    TGE_Screen        *screen;
+    Plot_Point_Group  *group;
+    int                y;
+    int                x;
+    int                idx;
+    char               buff[128];
+    double             plot_width;
+    double             plot_height;
+    int                inner_screen_height;
+    int                inner_screen_width;
+    double             z;
+
+    teardown_tge();
+
+    if (array_len(jule_plots) == 0) { return; }
+
+    tge = tge_new_game(Self, 0, 0, 3, TGE_TAKE_MOUSE);
+    tge->frame_callback = tge_frame;
+
+    array_traverse(jule_plots, plot) {
+        widget = tge_new_canvas_widget(tge, plot->width, plot->height, plot->title);
+        canvas = widget->data;
+        screen = &canvas->screen;
+
+        if (plot->appearx > 0) {
+            widget->hitbox_left = plot->appearx;
+        }
+        if (plot->appeary > 0) {
+            widget->hitbox_top = plot->appeary;
+        }
+
+        for (y = 0; y < plot->height; y += 1) {
+            for (x = 0; x < plot->width; x += 1) {
+                tge_screen_set_pixel(screen, x, y, plot->bg);
+            }
+        }
+
+        y = plot->height - (int)(plot->axis_pad * plot->height);
+        for (x = (int)(plot->axis_pad * plot->width); x <= plot->width; x += 1) {
+            tge_screen_set_pixel(screen, x, y, plot->fg);
+        }
+        x = (int)(plot->axis_pad * plot->width);
+        for (y = plot->height - (int)(plot->axis_pad * plot->height); y >= 0; y -= 1) {
+            tge_screen_set_pixel(screen, x, y, plot->fg);
+        }
+
+        plot_width          = plot->xmax - plot->xmin;
+        plot_height         = plot->ymax - plot->ymin;
+        inner_screen_height = (int)((1.0 - plot->axis_pad) * screen->height);
+        inner_screen_width  = (int)((1.0 - plot->axis_pad) * screen->width);
+        y                   = inner_screen_height;
+
+        if (plot->ymarks > 1) {
+            for (z = plot->ymin; z <= plot->ymax; z += ((plot->ymax - plot->ymin) / plot->ymarks)) {
+                y = TO_SCREEN_Y(z);
+                snprintf(buff, sizeof(buff), "%.3g ─", z);
+                tge_canvas_widget_add_label(widget,
+                                            (int)(plot->axis_pad * plot->width) - yed_get_string_width(buff),
+                                            y,
+                                            buff,
+                                            plot->fg, plot->bg);
+            }
+        }
+        if (plot->xmarks > 1) {
+            x = (int)(plot->axis_pad * plot->width);
+            y = plot->height - (int)(plot->axis_pad * plot->height) + 2;
+            for (z = plot->xmin; z <= plot->xmax; z += ((plot->xmax - plot->xmin) / plot->xmarks)) {
+                x = TO_SCREEN_X(z);
+
+                if (z >= plot->xmax) {
+                    x -= 1;
+                }
+
+                snprintf(buff, sizeof(buff), "╵");
+                tge_canvas_widget_add_label(widget,
+                                            x,
+                                            y,
+                                            buff,
+                                            plot->fg, plot->bg);
+                snprintf(buff, sizeof(buff), "%.3g", z);
+                tge_canvas_widget_add_label(widget,
+                                            x - (yed_get_string_width(buff) / (z >= plot->xmax ? 1 : 2)),
+                                            y + 2,
+                                            buff,
+                                            plot->fg, plot->bg);
+            }
+        }
+
+        idx = 0;
+        array_traverse(plot->groups, group) {
+            tge_point_group(widget, plot, group, idx);
+            idx += 1;
+        }
+
+        free_plot(plot);
+    }
+
+    array_clear(jule_plots);
+}
+
+static void teardown_tge(void) {
+    if (tge != NULL) {
+        tge_finish_game(tge);
+    }
+    tge = NULL;
+}
+
+static void tge_frame(TGE_Game *tge) {
+    if (array_len(tge->widgets) == 0) {
+        teardown_tge();
+        return;
+    }
+}
+
+static void unload(yed_plugin *self) {
+    (void)self;
+    free_all();
+    /* @todo */
+/*     yed_free_buffer(yed_get_or_create_special_rdonly_buffer(BUFFER_NAME)); */
+    yed_syntax_free(&syn);
+
+    teardown_tge();
+}
+
 int yed_plugin_boot(yed_plugin *self) {
     yed_event_handler pump_handler;
     yed_event_handler clear_handler;
@@ -1422,6 +2156,8 @@ int yed_plugin_boot(yed_plugin *self) {
 
 
     YED_PLUG_VERSION_CHECK();
+
+    Self = self;
 
     yed_plugin_set_unload_fn(self, unload);
 
@@ -1511,6 +2247,9 @@ int yed_plugin_boot(yed_plugin *self) {
     }
     if (yed_get_var("crapport-columns") == NULL) {
         yed_set_var("crapport-columns", DEFAULT_CRAPPORT_COLUMNS);
+    }
+    if (yed_get_var("crapport-jule-live-update") == NULL) {
+        yed_set_var("crapport-jule-live-update", "no");
     }
 
     yed_set_var("crapport-debug-log", "yes");
