@@ -1,42 +1,111 @@
 set md:__kwdargs__
     quote
-        foreach VAR KWDARGS
+        foreach var KWDARGS
             elocal
-                symbol VAR
-                field  KWDARGS VAR
+                symbol var
+                field  KWDARGS var
 
-fn
-    md:avg-metric KWDARGS
+fn (md:unique-column-values column)
     do
-        # GROUPS: list of fields by which to hierarchically organize results
-        # METRIC: field to report the average value of
+        local values object
+        foreach row @table
+            if (in row column)
+                insert values (field row column) nil
+        keys values
+
+fn (md:avg-metric KWDARGS)
+    do
+        # groups: list of fields by which to hierarchically organize results
+        # metric: field to report the average value of
+        # norm:   value of top-level group to normalize against and omit (optional)
         md:__kwdargs__
 
-        local OUT object
+        if (not (in KWDARGS "norm"))
+            local norm nil
 
-        # Build a matrix of all possible values for each grouping field.
-        local FIELD_VALS object
-        foreach GROUP GROUPS
+        local normgroup nil
+        if (and (len groups) (!= nil norm))
+            local normgroup (elem groups 0)
+
+        localfn (collect-groups groups metric normgroup norm match)
             do
-                insert FIELD_VALS GROUP object
-                foreach ROW @TABLE
-                    do
-                        if
-                            in ROW GROUP
-                            insert
-                                field FIELD_VALS GROUP
-                                field ROW        GROUP
-                                nil
-                insert FIELD_VALS GROUP
-                    keys
-                        field FIELD_VALS GROUP
+                local out object
+                if (empty groups)
+                    then
+                        local base nil
 
-        println FIELD_VALS
+                        if (!= nil normgroup)
+                            then
+                                local base
+                                    object
+                                        . "__sum__"   0
+                                        . "__count__" 0
 
-        localfn
-            build-matrix
-            do
-                local NEWMATRIX object
-                NEWMATRIX
+                                local normmatch match
+                                insert normmatch normgroup norm
 
-        OUT
+                                foreach row @table
+                                    do
+                                        local matches 1
+                                        foreach column normmatch
+                                            local matches
+                                                and matches
+                                                    in row metric
+                                                    in row column
+                                                    ==
+                                                        field row       column
+                                                        field normmatch column
+                                        if matches
+                                            then
+                                                insert base "__sum__"
+                                                    + (field base "__sum__") (field row metric)
+                                                insert base "__count__"
+                                                    + (field base "__count__") 1
+                                insert base metric
+                                    / (field base "__sum__") (field base "__count__")
+
+                        local out
+                            object
+                                . "__sum__"   0
+                                . "__count__" 0
+
+                        foreach row @table
+                            do
+                                local matches 1
+                                foreach column match
+                                    local matches
+                                        and matches
+                                            in row metric
+                                            in row column
+                                            ==
+                                                field row   column
+                                                field match column
+                                if matches
+                                    then
+                                        insert out "__sum__"
+                                            + (field out "__sum__") (field row metric)
+                                        insert out "__count__"
+                                            + (field out "__count__") 1
+
+                        insert out metric
+                            / (field out "__sum__") (field out "__count__")
+
+                        if (!= nil base)
+                            then
+                                insert out metric
+                                    / (field out metric) (field base metric)
+                    else
+                        local group (elem groups 0)
+                        erase groups 0
+
+                        foreach value (md:unique-column-values group)
+                            do
+                                if (or (!= group normgroup) (!= norm value))
+                                    then
+                                        if (not (in out value))
+                                            update-object match (object (. group value))
+
+                                        insert out value (collect-groups groups metric normgroup norm match)
+                out
+
+        collect-groups groups metric normgroup norm object

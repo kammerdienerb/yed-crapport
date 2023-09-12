@@ -1098,7 +1098,7 @@ static void jule_error_cb(Jule_Error_Info *info) {
             jule_output_cb(buff, strlen(buff));
             break;
         case JULE_ERR_BAD_INDEX:
-            s = jule_to_string(info->bad_index, 0);
+            s = jule_to_string(info->interp, info->bad_index, 0);
             snprintf(buff, sizeof(buff), "    INDEX:  %s\n", s);
             jule_output_cb(buff, strlen(buff));
             JULE_FREE(s);
@@ -1123,13 +1123,15 @@ static void on_jule_update(void) {
 
 static char *j_columns_str;
 
-static Jule_Status j_display_columns(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Status  status;
-    array_t      chars;
-    Jule_Value  *v;
-    Jule_Value  *ev;
-    unsigned     i;
-    char         c;
+static Jule_Status j_display_columns(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status        status;
+    array_t            chars;
+    unsigned           i;
+    Jule_Value        *v;
+    Jule_Value        *ev;
+    const Jule_String *string;
+    unsigned           j;
+    char               c;
 
     (void)interp;
 
@@ -1140,7 +1142,8 @@ static Jule_Status j_display_columns(Jule_Interp *interp, Jule_Value *tree, Jule
         j_columns_str = NULL;
     }
 
-    FOR_EACH(&values, v) {
+    for (i = 0; i < n_values; i += 1) {
+        v      = values[i];
         status = jule_eval(interp, v, &ev);
         if (status != JULE_SUCCESS) {
             *result = NULL;
@@ -1152,8 +1155,9 @@ static Jule_Status j_display_columns(Jule_Interp *interp, Jule_Value *tree, Jule
             *result = NULL;
             goto out_free;
         }
-        for (i = 0; i < ev->string.len; i += 1) {
-            c = ev->string.chars[i];
+        string = jule_get_string(interp, ev->string_id);
+        for (j = 0; j < string->len; j += 1) {
+            c = string->chars[j];
             array_push(chars, c);
         }
         c = ' ';
@@ -1175,9 +1179,11 @@ out:;
     return status;
 }
 
-static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
+static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status          status;
     Jule_Value          *expr;
+    Jule_String_ID       table_id;
+    Jule_String_ID       row_id;
     Jule_Value          *table;
     array_t              delete_rows;
     unsigned long long   idx;
@@ -1186,16 +1192,19 @@ static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, Jule_Array va
     int                  keep_row;
     Jule_Value         **it;
 
-    status = jule_args(interp, tree, "-*", values, &expr);
+    status = jule_args(interp, tree, "-*", n_values, values, &expr);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
     }
 
-    table = jule_lookup(interp, "@TABLE");
+    table_id = jule_get_string_id(interp, "@table");
+    row_id   = jule_get_string_id(interp, "@row");
+
+    table = jule_lookup(interp, table_id);
     if (table == NULL) {
         status = JULE_ERR_LOOKUP;
-        jule_make_lookup_error(interp, tree->line, "@TABLE");
+        jule_make_lookup_error(interp, tree->line, table_id);
         *result = NULL;
         goto out;
     }
@@ -1207,23 +1216,23 @@ static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, Jule_Array va
     JULE_BORROW(table);
 
     idx = 0;
-    FOR_EACH(&table->list, row) {
+    FOR_EACH(table->list, row) {
         JULE_BORROWER(row);
 
         row->in_symtab = 1;
 
-        jule_install_var(interp, "@ROW", row);
+        jule_install_var(interp, row_id, row);
         status = jule_eval(interp, expr, &expr_result);
         if (status != JULE_SUCCESS) {
             JULE_UNBORROWER(row);
-            jule_uninstall_var_no_free(interp, "@ROW");
+            jule_uninstall_var_no_free(interp, row_id);
             *result = NULL;
             goto out_unborrow;
         }
         if (expr_result->type != JULE_NUMBER) {
             status = JULE_ERR_TYPE;
             JULE_UNBORROWER(row);
-            jule_uninstall_var_no_free(interp, "@ROW");
+            jule_uninstall_var_no_free(interp, row_id);
             jule_make_type_error(interp, expr->line, JULE_NUMBER, expr_result->type);
             *result = NULL;
             goto out_unborrow;
@@ -1231,10 +1240,10 @@ static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, Jule_Array va
         keep_row = expr_result->number != 0;
         jule_free_value(expr_result);
         JULE_UNBORROWER(row);
-        jule_uninstall_var_no_free(interp, "@ROW");
+        jule_uninstall_var_no_free(interp, row_id);
 
         if (!keep_row) {
-            array_push(delete_rows, table->list.data[idx]);
+            array_push(delete_rows, table->list->data[idx]);
         }
 
         idx += 1;
@@ -1243,10 +1252,10 @@ static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, Jule_Array va
     array_traverse(delete_rows, it) {
 again:;
         idx = 0;
-        FOR_EACH(&table->list, row) {
+        FOR_EACH(table->list, row) {
             if (row == *it) {
                 jule_free_value_force(row);
-                jule_erase(&table->list, idx);
+                jule_erase(table->list, idx);
                 goto again;
             }
             idx += 1;
@@ -1264,42 +1273,43 @@ out:;
     return status;
 }
 
-static Jule_Status j_plot(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Status       status;
-    Jule_Value       *object;
-    Plot              plot;
-    Jule_Value       *title;
-    Jule_Value       *type;
-    Jule_Value       *fg;
-    Jule_Value       *bg;
-    Jule_Value       *invert_labels;
-    Jule_Value       *point_labels;
-    Jule_Value       *width;
-    Jule_Value       *height;
-    Jule_Value       *xmin;
-    Jule_Value       *xmax;
-    Jule_Value       *ymin;
-    Jule_Value       *ymax;
-    Jule_Value       *xmarks;
-    Jule_Value       *ymarks;
-    Jule_Value       *appearx;
-    Jule_Value       *appeary;
-    Jule_Value       *groups;
-    Jule_Value       *group;
-    Plot_Point_Group  point_group;
-    Plot_Point        plot_point;
-    Jule_Value       *size;
-    Jule_Value       *label;
-    Jule_Value       *labelx;
-    Jule_Value       *labely;
-    Jule_Value       *color;
-    char             *s;
-    Jule_Value       *points;
-    Jule_Value       *point;
-    Jule_Value       *x;
-    Jule_Value       *y;
+static Jule_Status j_plot(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status        status;
+    Jule_Value        *object;
+    Plot               plot;
+    const Jule_String *string;
+    Jule_Value        *title;
+    Jule_Value        *type;
+    Jule_Value        *fg;
+    Jule_Value        *bg;
+    Jule_Value        *invert_labels;
+    Jule_Value        *point_labels;
+    Jule_Value        *width;
+    Jule_Value        *height;
+    Jule_Value        *xmin;
+    Jule_Value        *xmax;
+    Jule_Value        *ymin;
+    Jule_Value        *ymax;
+    Jule_Value        *xmarks;
+    Jule_Value        *ymarks;
+    Jule_Value        *appearx;
+    Jule_Value        *appeary;
+    Jule_Value        *groups;
+    Jule_Value        *group;
+    Plot_Point_Group   point_group;
+    Plot_Point         plot_point;
+    Jule_Value        *size;
+    Jule_Value        *label;
+    Jule_Value        *labelx;
+    Jule_Value        *labely;
+    Jule_Value        *color;
+    char              *s;
+    Jule_Value        *points;
+    Jule_Value        *point;
+    Jule_Value        *x;
+    Jule_Value        *y;
 
-    status = jule_args(interp, tree, "o", values, &object);
+    status = jule_args(interp, tree, "o", n_values, values, &object);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
@@ -1311,28 +1321,29 @@ static Jule_Status j_plot(Jule_Interp *interp, Jule_Value *tree, Jule_Array valu
     plot.width    = 64;
     plot.axis_pad = 0.15;
 
-#define GET_FIELD(_name, _object, _field, _type)                          \
-do {                                                                      \
-    Jule_Value *_key_value = jule_string_value((_field), strlen(_field)); \
-    (_name) = jule_field((_object), _key_value);                          \
-    if ((_name) != NULL) {                                                \
-        if ((_name)->type != (_type)) { (_name) = NULL; }                 \
-    }                                                                     \
-    jule_free_value(_key_value);                                          \
+#define GET_FIELD(_name, _object, _field, _type)                  \
+do {                                                              \
+    Jule_Value *_key_value = jule_string_value(interp, (_field)); \
+    (_name) = jule_field((_object), _key_value);                  \
+    if ((_name) != NULL) {                                        \
+        if ((_name)->type != (_type)) { (_name) = NULL; }         \
+    }                                                             \
+    jule_free_value(_key_value);                                  \
 } while (0)
 
     GET_FIELD(title, object, "title", JULE_STRING);
     plot.title = title == NULL
                     ? strdup("Untitled Plot")
-                    : jule_to_string(title, JULE_NO_QUOTE);
+                    : jule_to_string(interp, title, JULE_NO_QUOTE);
 
     GET_FIELD(type, object, "type", JULE_STRING);
     if (type != NULL) {
-             if (type->string.len == strlen("scatter") && strncmp(type->string.chars, "scatter", strlen("scatter")) == 0)
+        string = jule_get_string(interp, type->string_id);
+             if (string->len == strlen("scatter") && strncmp(string->chars, "scatter", strlen("scatter")) == 0)
                 { plot.type = PLOT_SCATTER; }
-        else if (type->string.len == strlen("line")    && strncmp(type->string.chars, "line",    strlen("line"))    == 0)
+        else if (string->len == strlen("line")    && strncmp(string->chars, "line",    strlen("line"))    == 0)
                 { plot.type = PLOT_LINE; }
-        else if (type->string.len == strlen("bar")     && strncmp(type->string.chars, "bar",     strlen("bar"))     == 0)
+        else if (string->len == strlen("bar")     && strncmp(string->chars, "bar",     strlen("bar"))     == 0)
                 { plot.type = PLOT_BAR; }
     }
 
@@ -1352,18 +1363,18 @@ do {                                                                      \
     GET_FIELD(ymarks,        object, "ymarks",        JULE_NUMBER);
 
     plot.fg = 0;
-    if (fg != NULL && fg->string.len < 32) {
-        s = alloca(fg->string.len + 1);
-        memcpy(s, fg->string.chars, fg->string.len);
-        s[fg->string.len] = 0;
+    if (fg != NULL && (string = jule_get_string(interp, fg->string_id)) && string->len < 32) {
+        s = alloca(string->len + 1);
+        memcpy(s, string->chars, string->len);
+        s[string->len] = 0;
         sscanf(s + (s[0] == '#'), "%x", &plot.fg);
     }
 
     plot.bg = 0xeeeeee;
-    if (bg != NULL && bg->string.len < 32) {
-        s = alloca(bg->string.len + 1);
-        memcpy(s, bg->string.chars, bg->string.len);
-        s[bg->string.len] = 0;
+    if (bg != NULL && (string = jule_get_string(interp, bg->string_id)) && string->len < 32) {
+        s = alloca(string->len + 1);
+        memcpy(s, string->chars, string->len);
+        s[string->len] = 0;
         sscanf(s + (s[0] == '#'), "%x", &plot.bg);
     }
 
@@ -1389,7 +1400,7 @@ do {                                                                      \
 
     GET_FIELD(groups, object, "groups", JULE_LIST);
     if (groups != NULL) {
-        FOR_EACH(&groups->list, group) {
+        FOR_EACH(groups->list, group) {
             if (group->type != JULE_OBJECT) { continue; }
             memset(&point_group, 0, sizeof(point_group));
 
@@ -1402,21 +1413,21 @@ do {                                                                      \
             GET_FIELD(color,  group, "color",  JULE_STRING);
 
             point_group.size   = size   == NULL ? 0    : size->number;
-            point_group.label  = label  == NULL ? NULL : jule_to_string(label, JULE_NO_QUOTE);
+            point_group.label  = label  == NULL ? NULL : jule_to_string(interp, label, JULE_NO_QUOTE);
             point_group.labelx = labelx == NULL ? NAN  : labelx->number;
             point_group.labely = labely == NULL ? NAN  : labely->number;
 
             point_group.color = POINT_COLOR_NOT_SET;
-            if (color != NULL && color->string.len < 32) {
-                s = alloca(color->string.len + 1);
-                memcpy(s, color->string.chars, color->string.len);
-                s[color->string.len] = 0;
+            if (color != NULL && (string = jule_get_string(interp, color->string_id)) && string->len < 32) {
+                s = alloca(string->len + 1);
+                memcpy(s, string->chars, string->len);
+                s[string->len] = 0;
                 sscanf(s + (s[0] == '#'), "%x", &point_group.color);
             }
 
             GET_FIELD(points, group, "points", JULE_LIST);
             if (points != NULL) {
-                FOR_EACH(&points->list, point) {
+                FOR_EACH(points->list, point) {
                     if (point->type != JULE_OBJECT) { continue; }
                     memset(&plot_point, 0, sizeof(plot_point));
 
@@ -1447,19 +1458,22 @@ out:;
     return status;
 }
 
-static Jule_Status j_color(Jule_Interp *interp, Jule_Value *tree, Jule_Array values, Jule_Value **result) {
-    Jule_Status  status;
-    Jule_Value  *s;
-    char         buff[64];
-    yed_attrs    attrs;
+static Jule_Status j_color(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status        status;
+    Jule_Value        *s;
+    const Jule_String *string;
+    char               buff[64];
+    yed_attrs          attrs;
 
-    status = jule_args(interp, tree, "s", values, &s);
+    status = jule_args(interp, tree, "s", n_values, values, &s);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
     }
 
-    snprintf(buff, sizeof(buff), "%.*s", (int)s->string.len, s->string.chars);
+    string = jule_get_string(interp, s->string_id);
+
+    snprintf(buff, sizeof(buff), "%.*s", (int)string->len, string->chars);
 
     /* @bad I think this is totally not okay to do from this thread... */
     attrs = yed_parse_attrs(buff);
@@ -1467,7 +1481,7 @@ static Jule_Status j_color(Jule_Interp *interp, Jule_Value *tree, Jule_Array val
 
     snprintf(buff, sizeof(buff), "#%06x", attrs.fg);
 
-    *result = jule_string_value(buff, strlen(buff));
+    *result = jule_string_value(interp, buff);
 
 out:;
     return status;
@@ -1491,9 +1505,9 @@ static void create_jule_builtins(Jule_Interp *interp) {
         row = jule_object_value();
 
         hash_table_traverse(exp->props, key, val) {
-            kv = jule_string_value(key, strlen(key));
+            kv = jule_string_value(interp, key);
             if (val->type == STRING) {
-                vv = jule_string_value(val->string, strlen(val->string));
+                vv = jule_string_value(interp, val->string);
             } else if (val->type == NUMBER) {
                 vv = jule_number_value(val->number);
             } else if (val->type == BOOLEAN) {
@@ -1504,26 +1518,26 @@ static void create_jule_builtins(Jule_Interp *interp) {
             jule_insert(row, kv, vv);
         }
 
-        jule_push(&table->list, row);
+        table->list = jule_push(table->list, row);
     }
 
     columns = jule_list_value();
     if (layout.props != NULL) {
         hash_table_traverse(layout.props, key, val) {
-            kv = jule_string_value(key, strlen(key));
-            jule_push(&columns->list, kv);
+            kv = jule_string_value(interp, key);
+            columns->list = jule_push(columns->list, kv);
         }
     }
 
     pthread_mutex_unlock(&experiments_lock);
 
 
-    jule_install_var(interp, "@TABLE",           table);
-    jule_install_var(interp, "@COLUMNS",         columns);
-    jule_install_fn(interp,  "@display-columns", j_display_columns);
-    jule_install_fn(interp,  "@filter",          j_filter);
-    jule_install_fn(interp,  "@plot",            j_plot);
-    jule_install_fn(interp,  "@color",           j_color);
+    jule_install_var(interp, jule_get_string_id(interp, "@table"),           table);
+    jule_install_var(interp, jule_get_string_id(interp, "@columns"),         columns);
+    jule_install_fn(interp,  jule_get_string_id(interp, "@display-columns"), j_display_columns);
+    jule_install_fn(interp,  jule_get_string_id(interp, "@filter"),          j_filter);
+    jule_install_fn(interp,  jule_get_string_id(interp, "@plot"),            j_plot);
+    jule_install_fn(interp,  jule_get_string_id(interp, "@color"),           j_color);
 }
 
 static void *jule_timeout_thread(void *arg) {
@@ -1604,7 +1618,6 @@ static void update_jule(void) {
         if ((buff = yed_get_buffer(name)) != NULL) {
 
             if (pthread_mutex_trylock(&jule_lock) != 0) { return; }
-            pthread_mutex_unlock(&jule_lock);
 
             DBG("starting Jule interpreter");
 
@@ -1653,13 +1666,13 @@ static void after_jule(void) {
 
     array_clear(experiments_working);
 
-    table = jule_lookup(&interp, "@TABLE");
+    table = jule_lookup(&interp, jule_get_string_id(&interp, "@table"));
     if (table == NULL)            { goto out_unlock; }
     if (table->type != JULE_LIST) { goto out_unlock; }
 
-    ID_str = jule_string_value("ID", 2);
+    ID_str = jule_string_value(&interp, "ID");
 
-    FOR_EACH(&table->list, row) {
+    FOR_EACH(table->list, row) {
         if (row == NULL)              { continue; }
         if (row->type != JULE_OBJECT) { continue; }
 
@@ -1691,6 +1704,8 @@ out_unlock:;
     jule_free(&interp);
 
     pthread_mutex_unlock(&jule_lock);
+
+    yed_force_update();
 }
 
 static void epump(yed_event *event) {
