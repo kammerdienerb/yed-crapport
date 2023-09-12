@@ -117,7 +117,7 @@ static void tp_queue_clear(tp_queue_t *queue) {
     }
 }
 
-static void _tp_thread_task(void *_tp) {
+static void *_tp_thread_task(void *_tp) {
     tp_t         *tp;
     tp_task_t    *task;
     tp_task_fn_t  fn;
@@ -169,6 +169,8 @@ static void _tp_thread_task(void *_tp) {
     pthread_mutex_unlock(&tp->mutex);
 
     pthread_exit(NULL);
+
+    return NULL;
 }
 
 tp_t * tp_make(int n_workers) {
@@ -188,7 +190,7 @@ tp_t * tp_make(int n_workers) {
     tp->n_running = 0;
 
     for (i = 0; i < n_workers; i += 1) {
-        pthread_create(tp->threads + i, NULL, (void*(*)(void*))_tp_thread_task, tp);
+        pthread_create(tp->threads + i, NULL, _tp_thread_task, tp);
         tp->n_started += 1;
     }
 

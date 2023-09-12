@@ -356,10 +356,10 @@ static inline void _tge_ekey(yed_event *event) {
 
         game->focused_widget = NULL;
 
-        if (MOUSE_ROW(key) - 1 <  game->screen.off_y
-        ||  MOUSE_ROW(key) - 1 > game->screen.off_y + (game->screen.height / 2) - 1
-        ||  MOUSE_COL(key) - 1 <  game->screen.off_x
-        ||  MOUSE_COL(key) - 1 > game->screen.off_x + game->screen.width - 1) {
+        if (MOUSE_ROW(key) - 1 <  (int)game->screen.off_y
+        ||  MOUSE_ROW(key) - 1 > (int)(game->screen.off_y + (game->screen.height / 2) - 1)
+        ||  MOUSE_COL(key) - 1 <  (int)game->screen.off_x
+        ||  MOUSE_COL(key) - 1 > (int)(game->screen.off_x + game->screen.width - 1)) {
 
             event->cancel = 0;
             return;
@@ -1597,7 +1597,6 @@ static inline void _tge_canvas_widget_paint(TGE_Game *game, TGE_Widget *widget) 
     TGE_Canvas_Widget *canvas;
     yed_attrs          attrs;
     int                x;
-    int                y;
     TGE_Canvas_Label  *label;
 
     canvas = widget->data;
@@ -1689,7 +1688,6 @@ static inline TGE_Widget *tge_new_canvas_widget(TGE_Game *game, int width, int h
 static inline void tge_canvas_widget_add_label(TGE_Widget *widget, int x, int y, const char *label, int fg, int bg) {
     TGE_Canvas_Widget *canvas;
     TGE_Canvas_Label   new_label;
-    yed_attrs          attrs;
 
     if (widget->ops.free != _tge_canvas_widget_free) { return; }
 

@@ -12,6 +12,7 @@
 #include <sys/sysinfo.h>
 #endif
 #include <libgen.h>
+#include <inttypes.h>
 
 #include <yed/plugin.h>
 #include <yed/syntax.h>
@@ -700,7 +701,7 @@ EXPONENTIAL:                for (i = size; ; i <<= 1)
                             break;
                         } else if ((*cmp)(q, p, z) <= sense) {
                             t = p;
-                            if (i == size)
+                            if (i == (int)size)
                                 big = 0;
                             goto FASTCASE;
                         } else
@@ -713,7 +714,7 @@ EXPONENTIAL:                for (i = size; ; i <<= 1)
                             b = p;
                     }
                     goto COPY;
-FASTCASE:                while (i > size)
+FASTCASE:                while (i > (int)size)
                         if ((*cmp)(q, p = b + (i >>= 1), z)
                         <= sense)
                             t = p;
@@ -1134,6 +1135,7 @@ static Jule_Status j_display_columns(Jule_Interp *interp, Jule_Value *tree, unsi
     char               c;
 
     (void)interp;
+    (void)tree;
 
     chars = array_make(char);
 
@@ -1596,7 +1598,7 @@ static void *jule_thread(void *arg) {
     u64 end = measure_time_now_ms();
 
     char buff[64];
-    snprintf(buff, sizeof(buff), "took %llu ms", end - start);
+    snprintf(buff, sizeof(buff), "took %"PRIu64" ms", end - start);
     jule_output_cb(buff, strlen(buff));
 
     free(code);
@@ -1709,7 +1711,9 @@ out_unlock:;
 }
 
 static void epump(yed_event *event) {
-    u64         now;
+    u64 now;
+
+    (void)event;
 
     if (jule_dirty) {
         now = measure_time_now_ms();
@@ -1738,8 +1742,6 @@ static void epump(yed_event *event) {
 }
 
 static void eclear(yed_event *event) {
-    yed_attrs attrs;
-
     if (event->frame->buffer != yed_get_or_create_special_rdonly_buffer(BUFFER_NAME)) {
         return;
     }
@@ -1862,6 +1864,7 @@ static int complete_columns(char *string, yed_completion_results *results) {
 
     if (layout.props != NULL) {
         hash_table_traverse(layout.props, key, val) {
+            (void)val;
             array_push(columns, key);
         }
     }
