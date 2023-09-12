@@ -165,6 +165,8 @@ static inline void _tge_paint_screen(TGE_Screen *screen) {
     u32          r;
     u32          c;
     yed_attrs    attrs;
+    int          y;
+    int          x;
 
     memset(half_block.bytes, 0, sizeof(half_block.bytes));
     memcpy(half_block.bytes, "▀", 3);
@@ -175,9 +177,14 @@ static inline void _tge_paint_screen(TGE_Screen *screen) {
             attrs.fg    = screen->pixels[r       * screen->width + c];
             attrs.bg    = screen->pixels[(r + 1) * screen->width + c];
 
-            yed_set_cursor(screen->off_y + 1 + (r >> 1), screen->off_x + 1 + c);
-            yed_set_attr(attrs);
-            yed_screen_print_single_cell_glyph(half_block);
+            y = screen->off_y + 1 + (r >> 1);
+            x = screen->off_x + 1 + c;
+
+            if (y <= ys->term_rows && x <= ys->term_cols) {
+                yed_set_cursor(y, x);
+                yed_set_attr(attrs);
+                yed_screen_print_single_cell_glyph(half_block);
+            }
         }
     }
 }
