@@ -1,65 +1,40 @@
 println (fmt "*** CRAPPORT (% rows, % columns) ***" (len @table) (len @columns))
-# @display-columns "benchmark" "run_config" "runtime"
-
-
 
 eval-file "md.j"
+eval-file "plot.j"
 
+set metric "peak_rss"
+set groups (list "date")
+set norm   "2023-08-30 08:50:25.233017"
 
-
-@filter
-    and
-        ==  21      (field @row "iteration")
-        ==  "large" (field @row "input_size")
-        !=  "snap"  (field @row "benchmark")
-
-
-
-set rt
+set results
     md:avg-metric
         object
-            . "metric" "runtime"
-            . "groups" (list "run_config" "benchmark")
-#             . "norm"   "sys_malloc_32"
+            . "metric" metric
+            . "groups" groups
+            . "norm"   norm
+foreach item results (insert item "y" (field item metric))
 
-println rt
+set neg object
+foreach date (keys results)
+    do
+        local new (field results date)
+        insert new "y" (* (field new "y") -1)
+        insert neg (fmt "%-neg" date) new
 
+foreach date (keys neg)
+    insert results date (field neg date)
 
-
-### Plot results ###
-println "Plotting..."
-
-set groups object
-
-set colors
-    list
-        @color "&code-fn-call"
-        @color "&code-keyword"
-        @color "&code-string"
-        @color "&code-comment"
-        @color "&code-escape"
-        @color "&code-number"
-
-set plot
+set plot-args
     object
-        . "type"          "bar"
-        . "title"         "Test Graph"
-        . "width"         100
-        . "height"        80
-        . "fg"
-                          @color "&active"
-        . "bg"
-                          @color "&active.bg swap"
-#         . "xmax"          XMAX
-#         . "ymax"          YMAX
-        . "xmarks"        0
-        . "ymarks"        4
-        . "point-labels"  1
-        . "invert-labels" 0
-        . "groups"        groups
-#         . "appearx"       0.691
-#         . "appeary"       0.54
+        . "point-objects" results
+        . "order"         (sorted (keys results))
 
-# @plot plot
-
-println "Done."
+@plot
+    update-object (plot:bar-2d plot-args)
+        object
+            . "ymax"         1.3
+            . "ymin"         -1.3
+            . "width"        100
+#             . "appearx"      0.56
+#             . "appeary"      0.45

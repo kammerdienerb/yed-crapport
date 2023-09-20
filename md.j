@@ -1,6 +1,6 @@
 set md:__kwdargs__
     quote
-        foreach var KWDARGS
+        foreach var (keys KWDARGS)
             elocal
                 symbol var
                 field  KWDARGS var
@@ -9,7 +9,7 @@ fn (md:unique-column-values column)
     do
         local values object
         foreach row @table
-            if (in row column)
+            if (and (in row column))
                 insert values (field row column) nil
         keys values
 
@@ -20,11 +20,10 @@ fn (md:avg-metric KWDARGS)
         # norm:   value of top-level group to normalize against and omit (optional)
         md:__kwdargs__
 
-        if (not (in KWDARGS "norm"))
-            local norm nil
 
+        local donorm (in KWDARGS "norm")
         local normgroup nil
-        if (and (len groups) (!= nil norm))
+        if (and donorm (len groups))
             local normgroup (elem groups 0)
 
         localfn (collect-groups groups metric normgroup norm match)
@@ -47,7 +46,7 @@ fn (md:avg-metric KWDARGS)
                                 foreach row @table
                                     do
                                         local matches 1
-                                        foreach column normmatch
+                                        foreach column (keys normmatch)
                                             local matches
                                                 and matches
                                                     in row metric
@@ -72,7 +71,7 @@ fn (md:avg-metric KWDARGS)
                         foreach row @table
                             do
                                 local matches 1
-                                foreach column match
+                                foreach column (keys match)
                                     local matches
                                         and matches
                                             in row metric
@@ -108,4 +107,4 @@ fn (md:avg-metric KWDARGS)
                                         insert out value (collect-groups groups metric normgroup norm match)
                 out
 
-        collect-groups groups metric normgroup norm object
+        collect-groups groups metric normgroup (if donorm norm nil) object

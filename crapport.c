@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <pthread.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -150,25 +152,33 @@ typedef struct {
     double y;
 } Plot_Point;
 
-static yed_plugin       *Self;
-static array_t           experiments;
-static array_t           experiments_working;
-static pthread_mutex_t   experiments_lock = PTHREAD_MUTEX_INITIALIZER;
-static Experiment        layout;
-static tp_t             *tp;
-static int               loading;
-static yed_syntax        syn;
-static TGE_Game         *tge;
-static Jule_Interp       interp;
-static pthread_mutex_t   jule_lock = PTHREAD_MUTEX_INITIALIZER;
-static int               jule_dirty;
-static u64               jule_dirty_time_ms;
-static int               jule_finished;
-static array_t           jule_output_chars;
-static u64               jule_start_time_ms;
-static int               jule_abort;
-static array_t           jule_table_ids;
-static array_t           jule_plots;
+static yed_plugin        *Self;
+static array_t            experiments;
+static array_t            experiments_working;
+static pthread_mutex_t    experiments_lock = PTHREAD_MUTEX_INITIALIZER;
+static Experiment         layout;
+static tp_t              *tp;
+static int                loading;
+static yed_syntax         syn;
+static TGE_Game          *tge;
+static Jule_Interp        interp;
+static pthread_mutex_t    jule_lock = PTHREAD_MUTEX_INITIALIZER;
+static int                jule_dirty;
+static u64                jule_dirty_time_ms;
+static int                jule_finished;
+static array_t            jule_output_chars;
+static u64                jule_start_time_ms;
+static int                jule_abort;
+static array_t            jule_table_ids;
+static array_t            jule_plots;
+static int                has_err;
+static int                err_fixed;
+static char               err_msg[1024];
+static yed_direct_draw_t *err_dd;
+static char               err_file[512];
+static int                err_line;
+static int                err_col;
+static int                err_has_loc;
 
 static void init_exp(Experiment *exp) {
     exp->props = hash_table_make_e(Str, Value, str_hash, str_equ);
@@ -1044,75 +1054,101 @@ static Jule_Status jule_eval_cb(Jule_Value *value) {
     return JULE_SUCCESS;
 }
 
+
+static void set_err(int has_loc, char *file, int line, int col, const char *msg) {
+    int max_err_len;
+
+    has_err = 1;
+
+    err_has_loc = has_loc;
+    err_file[0] = 0;
+    if (err_has_loc) {
+        strcat(err_file, file);
+        err_line    = line;
+        err_col     = MAX(col, 1);
+    }
+    err_fixed   = 0;
+    err_msg[0]  = 0;
+
+    max_err_len = (ys->term_cols / 4 * 3) - 4; /* 4 is the padding on both sides. */
+
+    strncat(err_msg, msg, max_err_len - 3);
+    if ((int)strlen(msg) > max_err_len) {
+        strcat(err_msg, "...");
+    }
+}
+
 static void jule_error_cb(Jule_Error_Info *info) {
     Jule_Status  status;
     char         buff[1024];
+    char         dd_buff[4096];
     char        *s;
 
     status = info->status;
 
-    snprintf(buff, sizeof(buff), "Jule Error: %s\n", jule_error_string(status));
+    snprintf(buff, sizeof(buff), "%s:%u:%u: error: %s",
+             info->file == NULL ? "<?>" : info->file,
+             info->location.line,
+             info->location.col,
+             jule_error_string(status));
     jule_output_cb(buff, strlen(buff));
 
-    if (info->file != NULL) {
-        snprintf(buff, sizeof(buff), "    FILE:   %s\n", info->file);
-        jule_output_cb(buff, strlen(buff));
-    }
+    dd_buff[0] = 0;
+    strcat(dd_buff, buff);
 
-    switch (status) {
-        case JULE_ERR_UNEXPECTED_EOS:
-        case JULE_ERR_UNEXPECTED_TOK:
-            snprintf(buff, sizeof(buff), "    LINE:   %d, COLUMN: %d\n", info->location.line, info->location.col);
-            jule_output_cb(buff, strlen(buff));
-            break;
-        default:
-            snprintf(buff, sizeof(buff), "    LINE:   %d\n", info->location.line);
-            jule_output_cb(buff, strlen(buff));
-            break;
-    }
     switch (status) {
         case JULE_ERR_LOOKUP:
         case JULE_ERR_RELEASE_WHILE_BORROWED:
-            snprintf(buff, sizeof(buff), "    SYMBOL: %s\n", info->sym);
+            snprintf(buff, sizeof(buff), " (%s)", info->sym);
             jule_output_cb(buff, strlen(buff));
             break;
         case JULE_ERR_ARITY:
-            snprintf(buff, sizeof(buff), "    WANTED: %s%d\n", info->arity_at_least ? "at least " : "", info->wanted_arity);
-            jule_output_cb(buff, strlen(buff));
-            snprintf(buff, sizeof(buff), "    GOT:    %d\n", info->got_arity);
+            snprintf(buff, sizeof(buff), " (wanted %s%d, got %d)",
+                    info->arity_at_least ? "at least " : "",
+                    info->wanted_arity,
+                    info->got_arity);
             jule_output_cb(buff, strlen(buff));
             break;
         case JULE_ERR_TYPE:
-            snprintf(buff, sizeof(buff), "    WANTED: %s\n", jule_type_string(info->wanted_type));
-            jule_output_cb(buff, strlen(buff));
-            snprintf(buff, sizeof(buff), "    GOT:    %s\n", jule_type_string(info->got_type));
+            snprintf(buff, sizeof(buff), " (wanted %s, got %s)",
+                    jule_type_string(info->wanted_type),
+                    jule_type_string(info->got_type));
             jule_output_cb(buff, strlen(buff));
             break;
         case JULE_ERR_OBJECT_KEY_TYPE:
-            snprintf(buff, sizeof(buff), "    WANTED: number or string\n");
-            jule_output_cb(buff, strlen(buff));
-            snprintf(buff, sizeof(buff), "    GOT:    %s\n", jule_type_string(info->got_type));
+            snprintf(buff, sizeof(buff), " (wanted number or string, got %s)", jule_type_string(info->got_type));
             jule_output_cb(buff, strlen(buff));
             break;
         case JULE_ERR_NOT_A_FN:
-            snprintf(buff, sizeof(buff), "    GOT:    %s\n", jule_type_string(info->got_type));
+            snprintf(buff, sizeof(buff), " (got %s)", jule_type_string(info->got_type));
             jule_output_cb(buff, strlen(buff));
             break;
         case JULE_ERR_BAD_INDEX:
             s = jule_to_string(info->interp, info->bad_index, 0);
-            snprintf(buff, sizeof(buff), "    INDEX:  %s\n", s);
+            snprintf(buff, sizeof(buff), " (index: %s)", s);
             jule_output_cb(buff, strlen(buff));
             JULE_FREE(s);
             break;
         case JULE_ERR_FILE_NOT_FOUND:
         case JULE_ERR_FILE_IS_DIR:
         case JULE_ERR_MMAP_FAILED:
-            snprintf(buff, sizeof(buff), "    PATH:   %s\n", info->path);
+            snprintf(buff, sizeof(buff), " (%s)", info->path);
             jule_output_cb(buff, strlen(buff));
             break;
         default:
             break;
     }
+
+    strcat(dd_buff, buff);
+
+    set_err(info->file != NULL,
+            info->file,
+            info->location.line,
+            info->location.col,
+            dd_buff);
+
+    snprintf(buff, sizeof(buff), "\n");
+    jule_output_cb(buff, strlen(buff));
 
     jule_free_error_info(info);
 }
@@ -1153,7 +1189,7 @@ static Jule_Status j_display_columns(Jule_Interp *interp, Jule_Value *tree, unsi
         }
         if (ev->type != JULE_STRING) {
             status = JULE_ERR_TYPE;
-            jule_make_type_error(interp, ev->line, JULE_STRING, ev->type);
+            jule_make_type_error(interp, ev, JULE_STRING, ev->type);
             *result = NULL;
             goto out_free;
         }
@@ -1206,7 +1242,7 @@ static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, unsigned n_va
     table = jule_lookup(interp, table_id);
     if (table == NULL) {
         status = JULE_ERR_LOOKUP;
-        jule_make_lookup_error(interp, tree->line, table_id);
+        jule_make_lookup_error(interp, tree, table_id);
         *result = NULL;
         goto out;
     }
@@ -1235,7 +1271,7 @@ static Jule_Status j_filter(Jule_Interp *interp, Jule_Value *tree, unsigned n_va
             status = JULE_ERR_TYPE;
             JULE_UNBORROWER(row);
             jule_uninstall_var_no_free(interp, row_id);
-            jule_make_type_error(interp, expr->line, JULE_NUMBER, expr_result->type);
+            jule_make_type_error(interp, expr, JULE_NUMBER, expr_result->type);
             *result = NULL;
             goto out_unborrow;
         }
@@ -1492,10 +1528,11 @@ out:;
 
 static void create_jule_builtins(Jule_Interp *interp) {
     Jule_Value *table;
-    Jule_Value *row;
     Experiment *exp;
+    Jule_Value *row;
     Str         key;
     Value      *val;
+    Value      *lookup;
     Jule_Value *kv;
     Jule_Value *vv;
     Jule_Value *columns;
@@ -1506,18 +1543,30 @@ static void create_jule_builtins(Jule_Interp *interp) {
     array_traverse(experiments, exp) {
         row = jule_object_value();
 
-        hash_table_traverse(exp->props, key, val) {
-            kv = jule_string_value(interp, key);
-            if (val->type == STRING) {
-                vv = jule_string_value(interp, val->string);
-            } else if (val->type == NUMBER) {
-                vv = jule_number_value(val->number);
-            } else if (val->type == BOOLEAN) {
-                vv = jule_number_value(val->boolean);
-            } else {
-                break;
+        if (layout.props != NULL) {
+            hash_table_traverse(layout.props, key, val) {
+                kv = jule_string_value(interp, key);
+
+                lookup = hash_table_get_val(exp->props, key);
+
+                if (lookup == NULL) {
+                    jule_insert(row, kv, jule_nil_value());
+                } else {
+                    val = lookup;
+
+                    if (val->type == STRING) {
+                        vv = jule_string_value(interp, val->string);
+                    } else if (val->type == NUMBER) {
+                        vv = jule_number_value(val->number);
+                    } else if (val->type == BOOLEAN) {
+                        vv = jule_number_value(val->boolean);
+                    } else {
+                        break;
+                    }
+                    jule_insert(row, kv, vv);
+                }
+
             }
-            jule_insert(row, kv, vv);
         }
 
         table->list = jule_push(table->list, row);
@@ -1559,7 +1608,7 @@ static void *jule_timeout_thread(void *arg) {
 
         now = measure_time_now_ms();
 
-        if (now - jule_start_time_ms > 2500) {
+        if (0 && now - jule_start_time_ms > 2500) {
             jule_abort = 1;
             break;
         }
@@ -1567,6 +1616,8 @@ static void *jule_timeout_thread(void *arg) {
 
     return NULL;
 }
+
+static char jule_file_buff[1024];
 
 static void *jule_thread(void *arg) {
     char        *code;
@@ -1587,6 +1638,7 @@ static void *jule_thread(void *arg) {
     jule_set_error_callback(&interp,  jule_error_cb);
     jule_set_output_callback(&interp, jule_output_cb);
     jule_set_eval_callback(&interp,   jule_eval_cb);
+    interp.cur_file = jule_get_string_id(&interp, jule_file_buff);
 
     create_jule_builtins(&interp);
 
@@ -1610,6 +1662,58 @@ static void *jule_thread(void *arg) {
     return NULL;
 }
 
+static yed_attrs get_err_attrs(void) {
+    yed_attrs active;
+    yed_attrs a;
+    yed_attrs red;
+    float     brightness;
+
+    active = yed_active_style_get_active();
+
+    a = active;
+
+    if (ATTR_FG_KIND(a.flags) == ATTR_KIND_RGB) {
+        red        = yed_active_style_get_red();
+        brightness = ((RGB_32_r(active.bg) + RGB_32_g(active.bg) + RGB_32_b(active.bg)) / 3) / 255.0f;
+        a.bg       = RGB_32(RGB_32_r(red.fg) / 2 + (u32)(brightness * 0x7f),
+                            RGB_32_g(red.fg) / 2 + (u32)(brightness * 0x7f),
+                            RGB_32_b(red.fg) / 2 + (u32)(brightness * 0x7f));
+    } else {
+        a = yed_parse_attrs("&active.bg &attention.fg swap");
+    }
+
+    return a;
+}
+
+static void draw_error_message(int do_draw) {
+    char      line_buff[sizeof(err_msg) + 8];
+    int       line_len;
+    int       n_glyphs;
+    int       line_width;
+
+    if ((do_draw && err_dd) || (!do_draw && !err_dd)) {
+        return;
+    }
+
+    if (do_draw) {
+        if (err_has_loc) {
+            sprintf(line_buff, "  %s  ", err_msg);
+            line_len = strlen(line_buff);
+            yed_get_string_info(line_buff, line_len, &n_glyphs, &line_width);
+
+            err_dd = yed_direct_draw(ys->term_rows - 3,
+                                     ys->term_cols - line_width,
+                                     get_err_attrs(),
+                                     line_buff);
+        }
+    } else {
+        yed_kill_direct_draw(err_dd);
+        err_dd = 0;
+    }
+}
+
+
+
 static void update_jule(void) {
     pthread_t   t;
     char       *name;
@@ -1620,6 +1724,13 @@ static void update_jule(void) {
         if ((buff = yed_get_buffer(name)) != NULL) {
 
             if (pthread_mutex_trylock(&jule_lock) != 0) { return; }
+
+            has_err   = 0;
+            err_fixed = 1;
+
+            draw_error_message(0);
+
+            snprintf(jule_file_buff, sizeof(jule_file_buff), "%s", name);
 
             DBG("starting Jule interpreter");
 
@@ -1706,6 +1817,10 @@ out_unlock:;
     jule_free(&interp);
 
     pthread_mutex_unlock(&jule_lock);
+
+    if (has_err) {
+        draw_error_message(1);
+    }
 
     yed_force_update();
 }
@@ -1801,7 +1916,16 @@ do {                                                                      \
 #define WB "\\b"
 #endif
 
-static void estyle(yed_event *event)   { yed_syntax_style_event(&syn, event);         }
+static void draw_error_message(int);
+
+static void estyle(yed_event *event) {
+    yed_syntax_style_event(&syn, event);
+
+    if (err_dd) {
+        draw_error_message(0);
+        draw_error_message(1);
+    }
+}
 static void ebuffdel(yed_event *event) { yed_syntax_buffer_delete_event(&syn, event); }
 
 static void ebuffmod(yed_event *event) {
@@ -1809,10 +1933,16 @@ static void ebuffmod(yed_event *event) {
 
     if (event->buffer == NULL) { return; }
 
-    if ((jule = yed_get_var("crapport-jule-file"))
-    &&  strcmp(event->buffer->name, jule) == 0
-    &&  yed_var_is_truthy("crapport-jule-live-update")) {
-        on_jule_update();
+    if (has_err && strcmp(event->buffer->name, err_file) == 0) {
+        has_err   = 0;
+        err_fixed = 1;
+        draw_error_message(0);
+    }
+
+    if ((jule = yed_get_var("crapport-jule-file")) && strcmp(event->buffer->name, jule) == 0) {
+        if (yed_var_is_truthy("crapport-jule-live-update")) {
+            on_jule_update();
+        }
     }
 
     yed_syntax_buffer_mod_event(&syn, event);
@@ -1846,6 +1976,19 @@ static void eline(yed_event *event) {
     } else {
         yed_syntax_line_event(&syn, event);
     }
+}
+
+static void erow(yed_event *event) {
+    yed_buffer *buff;
+
+    if (!has_err)               { return; }
+    if (event->row != err_line) { return; }
+
+    buff = yed_get_buffer_by_path(err_file);
+
+    if (event->frame->buffer != buff) { return; }
+
+    event->row_base_attr = get_err_attrs();
 }
 
 static void evar(yed_event *event) {
@@ -1897,9 +2040,9 @@ static void tge_frame(TGE_Game *tge);
 static void teardown_tge(void);
 
 #define TO_SCREEN_X(_x) \
-    ((plot->width - inner_screen_width) + (int)(((_x) / plot_width) * inner_screen_width))
+    ((plot->width - inner_screen_width) + (int)((((_x) - plot->xmin) / plot_width) * inner_screen_width))
 #define TO_SCREEN_Y(_y) \
-    (plot->height - (plot->height - inner_screen_height) - (int)(((_y) / plot_height) * inner_screen_height))
+    (plot->height - (plot->height - inner_screen_height) - (int)((((_y) - plot->ymin) / plot_height) * inner_screen_height))
 #define IABS(_i) ((_i) < 0 ? -(_i) : (_i))
 
 static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *group, int idx) {
@@ -1910,6 +2053,7 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
     int                inner_screen_width;
     int                inner_screen_height;
     int                min_screen_x;
+    int                label_y_off;
     int                x_axis_x;
     int                y_axis_y;
     int                screen_size;
@@ -1961,8 +2105,19 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
         min_screen_x = MIN(min_screen_x, screen_x);
 
         if (plot->point_labels) {
-            snprintf(buff, sizeof(buff), "%.3g", point->y);
-            tge_canvas_widget_add_label(widget, screen_x - (strlen(buff) / 2), screen_y - 2, buff, plot->fg, -1);
+            if ((long long)point->y == point->y) {
+                snprintf(buff, sizeof(buff), "%lld", (long long)point->y);
+            } else {
+                snprintf(buff, sizeof(buff), "%.3g", point->y);
+            }
+
+            label_y_off = -2;
+
+            if (plot->type == PLOT_BAR && point->y < 0) {
+                label_y_off *= -1;
+            }
+
+            tge_canvas_widget_add_label(widget, screen_x - (strlen(buff) / 2), screen_y + label_y_off, buff, plot->fg, -1, 0);
         }
 
         switch (plot->type) {
@@ -2002,9 +2157,19 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
                 }
                 break;
             case PLOT_BAR:
-                for (y = inner_screen_height - (inner_screen_height == y_axis_y); y >= screen_y; y -= 1) {
-                    for (x = 0; x < screen_size; x += 1) {
-                        tge_screen_set_pixel(screen, screen_x - (screen_size / 2) + x, y, group->color);
+                if (point->y > 0) {
+                    y = TO_SCREEN_Y(MAX(plot->ymin, 0));
+                    for (y = y - (y == y_axis_y); y >= screen_y; y -= 1) {
+                        for (x = 0; x < screen_size; x += 1) {
+                            tge_screen_set_pixel(screen, screen_x - (screen_size / 2) + x, y, group->color);
+                        }
+                    }
+                } else {
+                    y = screen_y;
+                    for (y = y - (y == y_axis_y); y > TO_SCREEN_Y(MIN(plot->ymax, 0)); y -= 1) {
+                        for (x = 0; x < screen_size; x += 1) {
+                            tge_screen_set_pixel(screen, screen_x - (screen_size / 2) + x, y, group->color);
+                        }
                     }
                 }
                 break;
@@ -2022,14 +2187,15 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
                         : TO_SCREEN_Y(group->labely);
 
         if (plot->type == PLOT_BAR && idx & 1 && isnan(group->labely)) {
-            tge_canvas_widget_add_label(widget, screen_x, screen_y - 2, "|", group->color, -1);
+            tge_canvas_widget_add_label(widget, screen_x, screen_y - 2, "|", group->color, -1, TGE_LABEL_BOLD);
         }
         tge_canvas_widget_add_label(widget,
                                     screen_x - (strlen(group->label) / 2),
                                     screen_y,
                                     group->label,
                                     plot->invert_labels ? plot->bg     : group->color,
-                                    plot->invert_labels ? group->color : plot->bg);
+                                    plot->invert_labels ? group->color : plot->bg,
+                                    TGE_LABEL_BOLD);
     }
 }
 
@@ -2092,12 +2258,19 @@ static void tge_plots(void) {
         if (plot->ymarks > 1) {
             for (z = plot->ymin; z <= plot->ymax; z += ((plot->ymax - plot->ymin) / plot->ymarks)) {
                 y = TO_SCREEN_Y(z);
-                snprintf(buff, sizeof(buff), "%.3g ─", z);
+
+                if ((long long)z == z) {
+                    snprintf(buff, sizeof(buff), "%lld ─", (long long)z);
+                } else {
+                    snprintf(buff, sizeof(buff), "%.3g ─", z);
+                }
+
                 tge_canvas_widget_add_label(widget,
                                             (int)(plot->axis_pad * plot->width) - yed_get_string_width(buff),
                                             y,
                                             buff,
-                                            plot->fg, plot->bg);
+                                            plot->fg, plot->bg,
+                                            0);
             }
         }
         if (plot->xmarks > 1) {
@@ -2115,13 +2288,19 @@ static void tge_plots(void) {
                                             x,
                                             y,
                                             buff,
-                                            plot->fg, plot->bg);
-                snprintf(buff, sizeof(buff), "%.3g", z);
+                                            plot->fg, plot->bg,
+                                            0);
+                if ((long long)z == z) {
+                    snprintf(buff, sizeof(buff), "%lld", (long long)z);
+                } else {
+                    snprintf(buff, sizeof(buff), "%.3g", z);
+                }
                 tge_canvas_widget_add_label(widget,
                                             x - (yed_get_string_width(buff) / (z >= plot->xmax ? 1 : 2)),
                                             y + 2,
                                             buff,
-                                            plot->fg, plot->bg);
+                                            plot->fg, plot->bg,
+                                            0);
             }
         }
 
@@ -2168,6 +2347,7 @@ int yed_plugin_boot(yed_plugin *self) {
     yed_event_handler buffdel_handler;
     yed_event_handler buffmod_handler;
     yed_event_handler line_handler;
+    yed_event_handler row_handler;
     yed_event_handler var_handler;
     yed_event_handler load_handler;
     yed_event_handler write_handler;
@@ -2226,6 +2406,10 @@ int yed_plugin_boot(yed_plugin *self) {
     line_handler.kind = EVENT_LINE_PRE_DRAW;
     line_handler.fn   = eline;
     yed_plugin_add_event_handler(self, line_handler);
+
+    row_handler.kind = EVENT_ROW_PRE_CLEAR;
+    row_handler.fn   = erow;
+    yed_plugin_add_event_handler(self, row_handler);
 
     var_handler.kind = EVENT_VAR_POST_SET;
     var_handler.fn   = evar;

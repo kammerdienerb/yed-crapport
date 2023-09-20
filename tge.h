@@ -51,6 +51,11 @@ enum {
 };
 
 
+enum {
+    TGE_LABEL_BOLD      = 1u << 0u,
+    TGE_LABEL_UNDERLINE = 1u << 1u,
+};
+
 
 typedef struct {
     u32 *pixels;
@@ -1621,6 +1626,8 @@ static inline void _tge_canvas_widget_paint(TGE_Game *game, TGE_Widget *widget) 
         yed_set_cursor(widget->hitbox_top, widget->hitbox_left + x);
         yed_screen_print_n(" ", 1);
     }
+    attrs.flags |= ATTR_BOLD;
+    yed_set_attr(attrs);
     yed_set_cursor(widget->hitbox_top, widget->hitbox_left);
     yed_screen_print_n(canvas->title, MIN(strlen(canvas->title), widget->hitbox_width));
 
@@ -1692,7 +1699,7 @@ static inline TGE_Widget *tge_new_canvas_widget(TGE_Game *game, int width, int h
     return widget;
 }
 
-static inline void tge_canvas_widget_add_label(TGE_Widget *widget, int x, int y, const char *label, int fg, int bg) {
+static inline void tge_canvas_widget_add_label(TGE_Widget *widget, int x, int y, const char *label, int fg, int bg, int flags) {
     TGE_Canvas_Widget *canvas;
     TGE_Canvas_Label   new_label;
 
@@ -1712,6 +1719,12 @@ static inline void tge_canvas_widget_add_label(TGE_Widget *widget, int x, int y,
     if (bg >= 0) {
         new_label.attrs.flags |= ATTR_BG_KIND_BITS(ATTR_KIND_RGB);
         new_label.attrs.bg     = bg;
+    }
+    if (flags & TGE_LABEL_BOLD) {
+        new_label.attrs.flags |= ATTR_BOLD;
+    }
+    if (flags & TGE_LABEL_UNDERLINE) {
+        new_label.attrs.flags |= ATTR_UNDERLINE;
     }
 
     array_push(canvas->labels, new_label);
