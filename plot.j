@@ -27,8 +27,8 @@ set plot:__kwdargs__
     quote
         foreach var (keys KWDARGS)
             elocal
-                symbol var
-                field  KWDARGS var
+                symbol  var
+                KWDARGS var
 
 fn (plot:bar-2d KWDARGS)
     do
@@ -44,8 +44,8 @@ fn (plot:bar-2d KWDARGS)
             object
                 . "type"         "bar"
                 . "groups"       list
-                . "fg"           (elem plot:colors 0)
-                . "bg"           (elem plot:colors 1)
+                . "fg"           (plot:colors 0)
+                . "bg"           (plot:colors 1)
                 . "point-labels" 1
 
         local i    0
@@ -54,17 +54,17 @@ fn (plot:bar-2d KWDARGS)
 
         foreach key order
             do
-                local point (field point-objects key)
-                local y     (field point "y")
+                local point (point-objects key)
+                local y     (point "y")
 
                 if (> y ymax)
                     local ymax y
 
-                append (field plot "groups")
+                append (plot "groups")
                     object
                         . "label"  key
                         . "size"   0.75
-                        . "color"  (elem plot:colors (+ i 2))
+                        . "color"  (plot:colors (+ i 2))
                         . "points" (list (object (. "x" x) (. "y" y)))
 
                 local i (+ i 1)

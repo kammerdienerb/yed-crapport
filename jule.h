@@ -1,25 +1,27 @@
 #ifndef __JULE_H__
 #define __JULE_H__
 
-#define _JULE_STATUS                                                                                                  \
-    _JULE_STATUS_X(JULE_SUCCESS,                    "No error.")                                                      \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,         "Unexpected end of input.")                                       \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,         "Unexpected token.")                                              \
-    _JULE_STATUS_X(JULE_ERR_LINE_TOO_LONG,          "Token starts too far into a line (column too big).")             \
-    _JULE_STATUS_X(JULE_ERR_EXTRA_RPAREN,           "Extraneous closing parenthesis.")                                \
-    _JULE_STATUS_X(JULE_ERR_MISSING_RPAREN,         "End of line while parentheses left open.")                       \
-    _JULE_STATUS_X(JULE_ERR_NO_INPUT,               "Missing a top-level expression.")                                \
-    _JULE_STATUS_X(JULE_ERR_LOOKUP,                 "Failed to find symbol.")                                         \
-    _JULE_STATUS_X(JULE_ERR_NOT_A_FN,               "Invoked value is not a function.")                               \
-    _JULE_STATUS_X(JULE_ERR_ARITY,                  "Incorrect number of arguments.")                                 \
-    _JULE_STATUS_X(JULE_ERR_TYPE,                   "Incorrect argument type.")                                       \
-    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,        "Expression is not a valid key type.")                            \
-    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,            "Missing value expression.")                                      \
-    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,              "Field or element not found.")                                    \
-    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,         "Evaluation was cancelled.")                                      \
-    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,         "File not found.")                                                \
-    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,            "File is a directory.")                                           \
-    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,            "mmap() failed.")                                                 \
+#define _JULE_STATUS                                                                                                   \
+    _JULE_STATUS_X(JULE_SUCCESS,                    "No error.")                                                       \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,         "Unexpected end of input.")                                        \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,         "Unexpected token.")                                               \
+    _JULE_STATUS_X(JULE_ERR_LINE_TOO_LONG,          "Token starts too far into a line (column too big).")              \
+    _JULE_STATUS_X(JULE_ERR_TOO_MANY_LINES,         "You have exceeded the maximum number of lines in a single file.") \
+    _JULE_STATUS_X(JULE_ERR_EXTRA_RPAREN,           "Extraneous closing parenthesis.")                                 \
+    _JULE_STATUS_X(JULE_ERR_MISSING_RPAREN,         "End of line while parentheses left open.")                        \
+    _JULE_STATUS_X(JULE_ERR_EMPTY_PARENS,           "Empty parentheses are not allowed.")                              \
+    _JULE_STATUS_X(JULE_ERR_NO_INPUT,               "Missing a top-level expression.")                                 \
+    _JULE_STATUS_X(JULE_ERR_LOOKUP,                 "Failed to find symbol.")                                          \
+    _JULE_STATUS_X(JULE_ERR_BAD_INVOKE,             "Invoked value is not something that can be invoked in this way.") \
+    _JULE_STATUS_X(JULE_ERR_ARITY,                  "Incorrect number of arguments.")                                  \
+    _JULE_STATUS_X(JULE_ERR_TYPE,                   "Incorrect argument type.")                                        \
+    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,        "Expression is not a valid key type.")                             \
+    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,            "Missing value expression.")                                       \
+    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,              "Field or element not found.")                                     \
+    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,         "Evaluation was cancelled.")                                       \
+    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,         "File not found.")                                                 \
+    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,            "File is a directory.")                                            \
+    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,            "mmap() failed.")                                                  \
     _JULE_STATUS_X(JULE_ERR_RELEASE_WHILE_BORROWED, "Value released while a borrowed reference remains outstanding.")
 
 #define _JULE_STATUS_X(e, s) e,
@@ -35,6 +37,7 @@ typedef enum { _JULE_STATUS } Jule_Status;
     _JULE_TYPE_X(JULE_LIST,              "list")                             \
     _JULE_TYPE_X(JULE_OBJECT,            "object")                           \
     _JULE_TYPE_X(_JULE_TREE,             "unevaluated expression")           \
+    _JULE_TYPE_X(_JULE_TREE_LINE_LEADER, "unevaluated expression")           \
     _JULE_TYPE_X(_JULE_FN,               "function")                         \
     _JULE_TYPE_X(_JULE_BUILTIN_FN,       "function (builtin)")               \
     _JULE_TYPE_X(_JULE_LIST_OR_OBJECT,   "list or object")                   \
@@ -139,10 +142,12 @@ void         jule_free(Jule_Interp *interp);
 
 #define _GNU_SOURCE
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h> /* strlen, memcpy, memset, memcmp */
 #include <stdarg.h>
 #include <math.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 
@@ -493,6 +498,324 @@ void         jule_free(Jule_Interp *interp);
     }                                                                                        \
 
 
+/* qsort() + a context argument is a total portability mess. Thanks to this guy,
+   who wrote a nice wrapper and fallback so that I didn't have to. */
+
+/* Isaac Turner 29 April 2014 Public Domain */
+
+/*
+
+sort_r function to be exported.
+
+Parameters:
+  base is the array to be sorted
+  nel is the number of elements in the array
+  width is the size in bytes of each element of the array
+  compar is the comparison function
+  arg is a pointer to be passed to the comparison function
+
+void sort_r(void *base, size_t nel, size_t width,
+            int (*compar)(const void *_a, const void *_b, void *_arg),
+            void *arg);
+
+*/
+
+#define _SORT_R_INLINE inline
+
+#if (defined __APPLE__ || defined __MACH__ || defined __DARWIN__ || \
+     (defined __FreeBSD__ && !defined(qsort_r)) || defined __DragonFly__)
+#  define _SORT_R_BSD
+#elif (defined __GLIBC__ || (defined (__FreeBSD__) && defined(qsort_r)))
+#  define _SORT_R_LINUX
+#elif (defined _WIN32 || defined _WIN64 || defined __WINDOWS__ || \
+       defined __MINGW32__ || defined __MINGW64__)
+#  define _SORT_R_WINDOWS
+#  undef _SORT_R_INLINE
+#  define _SORT_R_INLINE __inline
+#else
+  /* Using our own recursive quicksort sort_r_simple() */
+#endif
+
+#if (defined NESTED_QSORT && NESTED_QSORT == 0)
+#  undef NESTED_QSORT
+#endif
+
+#define SORT_R_SWAP(a,b,tmp) ((tmp) = (a), (a) = (b), (b) = (tmp))
+
+/* swap a and b */
+/* a and b must not be equal! */
+static _SORT_R_INLINE void sort_r_swap(char *__restrict a, char *__restrict b,
+                                       size_t w)
+{
+  char tmp, *end = a+w;
+  for(; a < end; a++, b++) { SORT_R_SWAP(*a, *b, tmp); }
+}
+
+/* swap a, b iff a>b */
+/* a and b must not be equal! */
+/* __restrict is same as restrict but better support on old machines */
+static _SORT_R_INLINE int sort_r_cmpswap(char *__restrict a,
+                                         char *__restrict b, size_t w,
+                                         int (*compar)(const void *_a,
+                                                       const void *_b,
+                                                       void *_arg),
+                                         void *arg)
+{
+  if(compar(a, b, arg) > 0) {
+    sort_r_swap(a, b, w);
+    return 1;
+  }
+  return 0;
+}
+
+/*
+Swap consecutive blocks of bytes of size na and nb starting at memory addr ptr,
+with the smallest swap so that the blocks are in the opposite order. Blocks may
+be internally re-ordered e.g.
+
+  12345ab  ->   ab34512
+  123abc   ->   abc123
+  12abcde  ->   deabc12
+*/
+static _SORT_R_INLINE void sort_r_swap_blocks(char *ptr, size_t na, size_t nb)
+{
+  if(na > 0 && nb > 0) {
+    if(na > nb) { sort_r_swap(ptr, ptr+na, nb); }
+    else { sort_r_swap(ptr, ptr+nb, na); }
+  }
+}
+
+/* Implement recursive quicksort ourselves */
+/* Note: quicksort is not stable, equivalent values may be swapped */
+static _SORT_R_INLINE void sort_r_simple(void *base, size_t nel, size_t w,
+                                         int (*compar)(const void *_a,
+                                                       const void *_b,
+                                                       void *_arg),
+                                         void *arg)
+{
+  char *b = (char *)base, *end = b + nel*w;
+
+  /* for(size_t i=0; i<nel; i++) {printf("%4i", *(int*)(b + i*sizeof(int)));}
+  printf("\n"); */
+
+  if(nel < 10) {
+    /* Insertion sort for arbitrarily small inputs */
+    char *pi, *pj;
+    for(pi = b+w; pi < end; pi += w) {
+      for(pj = pi; pj > b && sort_r_cmpswap(pj-w,pj,w,compar,arg); pj -= w) {}
+    }
+  }
+  else
+  {
+    /* nel > 6; Quicksort */
+
+    int cmp;
+    char *pl, *ple, *pr, *pre, *pivot;
+    char *last = b+w*(nel-1), *tmp;
+
+    /*
+    Use median of second, middle and second-last items as pivot.
+    First and last may have been swapped with pivot and therefore be extreme
+    */
+    char *l[3];
+    l[0] = b + w;
+    l[1] = b+w*(nel/2);
+    l[2] = last - w;
+
+    /* printf("pivots: %i, %i, %i\n", *(int*)l[0], *(int*)l[1], *(int*)l[2]); */
+
+    if(compar(l[0],l[1],arg) > 0) { SORT_R_SWAP(l[0], l[1], tmp); }
+    if(compar(l[1],l[2],arg) > 0) {
+      SORT_R_SWAP(l[1], l[2], tmp);
+      if(compar(l[0],l[1],arg) > 0) { SORT_R_SWAP(l[0], l[1], tmp); }
+    }
+
+    /* swap mid value (l[1]), and last element to put pivot as last element */
+    if(l[1] != last) { sort_r_swap(l[1], last, w); }
+
+    /*
+    pl is the next item on the left to be compared to the pivot
+    pr is the last item on the right that was compared to the pivot
+    ple is the left position to put the next item that equals the pivot
+    ple is the last right position where we put an item that equals the pivot
+
+                                           v- end (beyond the array)
+      EEEEEELLLLLLLLuuuuuuuuGGGGGGGEEEEEEEE.
+      ^- b  ^- ple  ^- pl   ^- pr  ^- pre ^- last (where the pivot is)
+
+    Pivot comparison key:
+      E = equal, L = less than, u = unknown, G = greater than, E = equal
+    */
+    pivot = last;
+    ple = pl = b;
+    pre = pr = last;
+
+    /*
+    Strategy:
+    Loop into the list from the left and right at the same time to find:
+    - an item on the left that is greater than the pivot
+    - an item on the right that is less than the pivot
+    Once found, they are swapped and the loop continues.
+    Meanwhile items that are equal to the pivot are moved to the edges of the
+    array.
+    */
+    while(pl < pr) {
+      /* Move left hand items which are equal to the pivot to the far left.
+         break when we find an item that is greater than the pivot */
+      for(; pl < pr; pl += w) {
+        cmp = compar(pl, pivot, arg);
+        if(cmp > 0) { break; }
+        else if(cmp == 0) {
+          if(ple < pl) { sort_r_swap(ple, pl, w); }
+          ple += w;
+        }
+      }
+      /* break if last batch of left hand items were equal to pivot */
+      if(pl >= pr) { break; }
+      /* Move right hand items which are equal to the pivot to the far right.
+         break when we find an item that is less than the pivot */
+      for(; pl < pr; ) {
+        pr -= w; /* Move right pointer onto an unprocessed item */
+        cmp = compar(pr, pivot, arg);
+        if(cmp == 0) {
+          pre -= w;
+          if(pr < pre) { sort_r_swap(pr, pre, w); }
+        }
+        else if(cmp < 0) {
+          if(pl < pr) { sort_r_swap(pl, pr, w); }
+          pl += w;
+          break;
+        }
+      }
+    }
+
+    pl = pr; /* pr may have gone below pl */
+
+    /*
+    Now we need to go from: EEELLLGGGGEEEE
+                        to: LLLEEEEEEEGGGG
+
+    Pivot comparison key:
+      E = equal, L = less than, u = unknown, G = greater than, E = equal
+    */
+    sort_r_swap_blocks(b, ple-b, pl-ple);
+    sort_r_swap_blocks(pr, pre-pr, end-pre);
+
+    /*for(size_t i=0; i<nel; i++) {printf("%4i", *(int*)(b + i*sizeof(int)));}
+    printf("\n");*/
+
+    sort_r_simple(b, (pl-ple)/w, w, compar, arg);
+    sort_r_simple(end-(pre-pr), (pre-pr)/w, w, compar, arg);
+  }
+}
+
+
+#if defined NESTED_QSORT
+
+  static _SORT_R_INLINE void sort_r(void *base, size_t nel, size_t width,
+                                    int (*compar)(const void *_a,
+                                                  const void *_b,
+                                                  void *aarg),
+                                    void *arg)
+  {
+    int nested_cmp(const void *a, const void *b)
+    {
+      return compar(a, b, arg);
+    }
+
+    qsort(base, nel, width, nested_cmp);
+  }
+
+#else /* !NESTED_QSORT */
+
+  /* Declare structs and functions */
+
+  #if defined _SORT_R_BSD
+
+    /* Ensure qsort_r is defined */
+    extern void qsort_r(void *base, size_t nel, size_t width, void *thunk,
+                        int (*compar)(void *_thunk,
+                                      const void *_a, const void *_b));
+
+  #endif
+
+  #if defined _SORT_R_BSD || defined _SORT_R_WINDOWS
+
+    /* BSD (qsort_r), Windows (qsort_s) require argument swap */
+
+    struct sort_r_data
+    {
+      void *arg;
+      int (*compar)(const void *_a, const void *_b, void *_arg);
+    };
+
+    static _SORT_R_INLINE int sort_r_arg_swap(void *s,
+                                              const void *a, const void *b)
+    {
+      struct sort_r_data *ss = (struct sort_r_data*)s;
+      return (ss->compar)(a, b, ss->arg);
+    }
+
+  #endif
+
+  #if defined _SORT_R_LINUX
+
+    typedef int(* __compar_d_fn_t)(const void *, const void *, void *);
+    extern void (qsort_r)(void *base, size_t nel, size_t width,
+                          __compar_d_fn_t __compar, void *arg)
+      __attribute__((nonnull (1, 4)));
+
+  #endif
+
+  /* implementation */
+
+  static _SORT_R_INLINE void sort_r(void *base, size_t nel, size_t width,
+                                    int (*compar)(const void *_a,
+                                                  const void *_b, void *_arg),
+                                    void *arg)
+  {
+    #if defined _SORT_R_LINUX
+
+      #if defined __GLIBC__ && ((__GLIBC__ < 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 8))
+
+        /* no qsort_r in glibc before 2.8, need to use nested qsort */
+        sort_r_simple(base, nel, width, compar, arg);
+
+      #else
+
+        qsort_r(base, nel, width, compar, arg);
+
+      #endif
+
+    #elif defined _SORT_R_BSD
+
+      struct sort_r_data tmp;
+      tmp.arg = arg;
+      tmp.compar = compar;
+      qsort_r(base, nel, width, &tmp, sort_r_arg_swap);
+
+    #elif defined _SORT_R_WINDOWS
+
+      struct sort_r_data tmp;
+      tmp.arg = arg;
+      tmp.compar = compar;
+      qsort_s(base, nel, width, sort_r_arg_swap, &tmp);
+
+    #else
+
+      /* Fall back to our own quicksort implementation */
+      sort_r_simple(base, nel, width, compar, arg);
+
+    #endif
+  }
+
+#endif /* !NESTED_QSORT */
+
+#undef _SORT_R_INLINE
+#undef _SORT_R_WINDOWS
+#undef _SORT_R_LINUX
+#undef _SORT_R_BSD
+
 
 Jule_Status jule_map_file_into_readonly_memory(const char *path, const char **addr, int *size) {
     Jule_Status  status;
@@ -686,7 +1009,7 @@ static inline void jule_erase(Jule_Array *array, unsigned idx) {
 
 
 #define JULE_MAX_BORROW_COUNT_POT (10)
-#define JULE_MAX_LINE_POT         (18)
+#define JULE_MAX_LINE_POT         (17)
 #define JULE_MAX_COL_POT          (10)
 
 
@@ -734,6 +1057,7 @@ struct Jule_Value_Struct {
     unsigned long long      local          :                         1; //  6
     unsigned long long      borrow_count   : JULE_MAX_BORROW_COUNT_POT; // 16
     unsigned long long      borrower_count : JULE_MAX_BORROW_COUNT_POT; // 26
+    unsigned long long      is_line_parent :                         1; // 27
     unsigned long long      line           :         JULE_MAX_LINE_POT; // 44
     unsigned long long      col            :          JULE_MAX_COL_POT; // 54
     unsigned long long      ind_level      :          JULE_MAX_COL_POT; // 64
@@ -746,6 +1070,9 @@ typedef struct Jule_Parse_Context_Struct {
     Jule_Array  *stack;
     Jule_Array  *roots;
     int          line;
+    int          col;
+    int          ind;
+    int          plevel;
 } Jule_Parse_Context;
 
 
@@ -997,6 +1324,7 @@ static void _jule_free_value(Jule_Value *value, int force) {
             value->object = NULL;
             break;
         case _JULE_TREE:
+        case _JULE_TREE_LINE_LEADER:
         case _JULE_FN:
             FOR_EACH(value->eval_values, child) {
                 child->in_symtab = 0;
@@ -1119,6 +1447,7 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
             }
             break;
         case _JULE_TREE:
+        case _JULE_TREE_LINE_LEADER:
         case _JULE_FN:
             FOR_EACH(copy->eval_values, child) {
                 array = jule_push(array, _jule_copy(child, force));
@@ -1267,11 +1596,11 @@ static void jule_make_object_key_type_error(Jule_Interp *interp, Jule_Value *val
     jule_error(interp, &info);
 }
 
-static void jule_make_not_a_fn_error(Jule_Interp *interp, Jule_Value *value, Jule_Type got) {
+static void jule_make_bad_invoke_error(Jule_Interp *interp, Jule_Value *value, Jule_Type got) {
     Jule_Error_Info info;
     memset(&info, 0, sizeof(info));
     info.interp        = interp;
-    info.status        = JULE_ERR_NOT_A_FN;
+    info.status        = JULE_ERR_BAD_INVOKE;
     info.location.line = value->line;
     info.location.col  = value->col;
     if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
@@ -1434,18 +1763,31 @@ static int jule_trim_leading_ws(Jule_Parse_Context *cxt) {
     return w;
 }
 
-static void jule_ensure_top_is_tree(Jule_Parse_Context *cxt) {
+static void jule_push_tree(Jule_Parse_Context *cxt) {
+    Jule_Value *value;
+
+    value = _jule_value();
+    value->type        = _JULE_TREE;
+    value->ind_level   = cxt->ind;
+    value->line        = cxt->line;
+    value->col         = cxt->col;
+    value->eval_values = JULE_ARRAY_INIT;
+
+    cxt->stack = jule_push(cxt->stack, value);
+}
+
+static void jule_ensure_top_is_line_leader(Jule_Parse_Context *cxt) {
     Jule_Value *top;
     Jule_Value *value;
 
     top = jule_top(cxt->stack);
 
-    if (top->type == _JULE_TREE) { return; }
+    if (top->type == _JULE_TREE_LINE_LEADER) { return; }
 
     value = _jule_value();
     memcpy(value, top, sizeof(*value));
     memset(top, 0, sizeof(*top));
-    top->type        = _JULE_TREE;
+    top->type        = _JULE_TREE_LINE_LEADER;
     top->ind_level   = value->ind_level;
     top->line        = value->line;
     top->col         = value->col;
@@ -1459,8 +1801,8 @@ static int jule_consume_comment(Jule_Parse_Context *cxt) {
     if (PEEK_CHAR(cxt, c) && c == '#') {
         NEXT(cxt);
         while (PEEK_CHAR(cxt, c)) {
-            NEXT(cxt);
             if (c == '\n') { break; }
+            NEXT(cxt);
         }
         return 1;
     }
@@ -1468,153 +1810,198 @@ static int jule_consume_comment(Jule_Parse_Context *cxt) {
     return 0;
 }
 
-static Jule_Status jule_parse_line(Jule_Parse_Context *cxt) {
-    int                 ind;
-    int                 plevel;
-    int                 p;
-    int                 c;
-    Jule_Value         *top;
-    int                 col;
-    int                 ws;
-    int                 first;
+static Jule_Status jule_parse_next_value(Jule_Parse_Context *cxt, Jule_Value **valout, Jule_Token *tkout) {
+    int                 status;
     Jule_Value         *val;
+    int                 start_col;
     const char         *tk_start;
     Jule_Token          tk;
     const char         *tk_end;
+    Jule_Value         *top;
+    Jule_Value         *child;
+    int                 c;
     char               *sbuff;
     unsigned long long  slen;
     char                d_copy[128];
     double              d;
 
-    ind    = jule_trim_leading_ws(cxt);
-    plevel = 0;
-    p      = 0;
-    col    = 1;
-    ws     = ind;
-    first  = 1;
+    status  = JULE_SUCCESS;
+    val     = NULL;
+    *valout = NULL;
+    *tkout  = JULE_TK_NONE;
 
-    if (!PEEK_CHAR(cxt, c)) {            goto done; }
-    if (c == '\n')          { NEXT(cxt); goto done; }
+    cxt->col += jule_trim_leading_ws(cxt);
+    if (jule_consume_comment(cxt)) { goto out; }
 
-    if (jule_consume_comment(cxt)) { goto done; }
+    tk_start = cxt->cursor;
+    if ((tk = jule_parse_token(cxt)) == JULE_TK_NONE) { goto out; }
+    tk_end = cxt->cursor;
+
+    if (cxt->col >= (1 << JULE_MAX_COL_POT)) {
+        PARSE_ERR_RET(cxt->interp, JULE_ERR_LINE_TOO_LONG, cxt->line, cxt->col);
+    }
+
+    start_col = cxt->col;
+
+    if (tk == JULE_TK_LPAREN) {
+        jule_push_tree(cxt);
+        val = top = jule_top(cxt->stack);
+
+        cxt->col += tk_end - tk_start;
+
+        cxt->plevel += 1;
+
+        child = NULL;
+        while ((status = jule_parse_next_value(cxt, &child, tkout)) == JULE_SUCCESS && child != NULL) {
+            top->eval_values = jule_push(top->eval_values, child);
+        }
+
+        if (status != JULE_SUCCESS) {
+            PARSE_ERR_RET(cxt->interp, status, cxt->line, cxt->col);
+        }
+
+        if (*tkout != JULE_TK_RPAREN) {
+            PARSE_ERR_RET(cxt->interp, JULE_ERR_MISSING_RPAREN, cxt->line, cxt->col);
+        }
+
+        if (jule_len(top->eval_values) == 0) {
+            PARSE_ERR_RET(cxt->interp, JULE_ERR_EMPTY_PARENS, cxt->line, cxt->col - 1);
+        }
+
+        cxt->plevel -= 1;
+
+        *tkout = JULE_TK_LPAREN;
+
+        jule_pop(cxt->stack);
+
+        goto out_val;
+    } else if (tk == JULE_TK_RPAREN) {
+        if (cxt->plevel <= 0) {
+            PARSE_ERR_RET(cxt->interp, JULE_ERR_EXTRA_RPAREN, cxt->line, cxt->col);
+        }
+
+        *tkout = JULE_TK_RPAREN;
+
+        cxt->col += tk_end - tk_start;
+        goto out;
+    }
+
+    *tkout = tk;
+
+    cxt->col += tk_end - tk_start;
+
+    switch (tk) {
+        case JULE_TK_SYMBOL:
+            if (tk_end - tk_start == 3 && strncmp(tk_start, "nil", tk_end - tk_start) == 0) {
+                val = jule_nil_value();
+            } else {
+                sbuff = alloca(tk_end - tk_start + 1);
+                memcpy(sbuff, tk_start, tk_end - tk_start);
+                sbuff[tk_end - tk_start] = 0;
+                val = jule_symbol_value(cxt->interp, sbuff);
+            }
+            break;
+        case JULE_TK_STRING:
+            JULE_ASSERT(tk_start[0] == '"' && "string doesn't start with quote");
+            tk_start += 1;
+
+            sbuff = alloca(tk_end - tk_start + 1);
+            slen  = 0;
+
+            for (; tk_start < tk_end; tk_start += 1) {
+                c = *tk_start;
+
+                if (c == '"') { break; }
+                if (c == '\\') {
+                    tk_start += 1;
+                    if (tk_start < tk_end) {
+                        c = *tk_start;
+                        switch (c) {
+                            case '\\':
+                                break;
+                            case 'n':
+                                c = '\n';
+                                break;
+                            case 'r':
+                                c = '\r';
+                                break;
+                            case 't':
+                                c = '\t';
+                                break;
+                            case '"':
+                                c = '"';
+                                break;
+                            default:
+                                goto add_char;
+                        }
+                    }
+                    goto add_char;
+                } else {
+add_char:;
+                    sbuff[slen] = c;
+                }
+                slen += 1;
+            }
+
+            sbuff[slen] = 0;
+
+            val = jule_string_value(cxt->interp, sbuff);
+            break;
+        case JULE_TK_NUMBER:
+            strncpy(d_copy, tk_start, tk_end - tk_start);
+            d_copy[tk_end - tk_start] = 0;
+            sscanf(d_copy, "%lg", &d);
+            val = jule_number_value(d);
+            break;
+        case JULE_TK_EOS_ERR:
+            PARSE_ERR_RET(cxt->interp, JULE_ERR_UNEXPECTED_EOS, cxt->line, start_col + (tk_end - tk_start));
+            break;
+        default:
+            break;
+    }
+
+out_val:;
+
+    JULE_ASSERT(val != NULL);
+
+    val->ind_level = cxt->ind;
+    val->line      = cxt->line;
+    val->col       = start_col;
+
+    *valout = val;
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_parse_line(Jule_Parse_Context *cxt) {
+    int         status;
+    int         c;
+    Jule_Value *top;
+    int         first;
+    Jule_Value *val;
+    Jule_Token  tk;
+
+    status = JULE_SUCCESS;
+
+    cxt->ind = jule_trim_leading_ws(cxt);
+    cxt->col = 1 + cxt->ind;
+    first    = 1;
+
+    if (!PEEK_CHAR(cxt, c))                     { goto done; }
+    if (c == '\n' || jule_consume_comment(cxt)) { goto eol;  }
 
     while ((top = jule_top(cxt->stack)) != NULL
-    &&     ind <= top->ind_level) {
+    &&     cxt->ind <= top->ind_level) {
 
         jule_pop(cxt->stack);
     }
 
-    do {
-        val = NULL;
-
-        col += ws;
-
-        if (jule_consume_comment(cxt)) { goto done; }
-
-        tk_start = cxt->cursor;
-        if ((tk = jule_parse_token(cxt)) == JULE_TK_NONE) { break; }
-        tk_end = cxt->cursor;
-
-        if (col >= (1 << JULE_MAX_COL_POT)) {
-            PARSE_ERR_RET(cxt->interp, JULE_ERR_LINE_TOO_LONG, cxt->line, col);
-        }
-
-        if (tk == JULE_TK_LPAREN) {
-            plevel += 1;
-            p       = 1;
-
-            goto next_token;
-        } else if (tk == JULE_TK_RPAREN) {
-            if (plevel <= 0) {
-                PARSE_ERR_RET(cxt->interp, JULE_ERR_EXTRA_RPAREN, cxt->line, col);
-            }
-            plevel -= 1;
-
-            jule_pop(cxt->stack);
-            top = jule_top(cxt->stack);
-
-            goto next_token;
-        }
-
-        switch (tk) {
-            case JULE_TK_SYMBOL:
-                if (tk_end - tk_start == 3 && strncmp(tk_start, "nil", tk_end - tk_start) == 0) {
-                    val = jule_nil_value();
-                } else {
-                    sbuff = alloca(tk_end - tk_start + 1);
-                    memcpy(sbuff, tk_start, tk_end - tk_start);
-                    sbuff[tk_end - tk_start] = 0;
-                    val = jule_symbol_value(cxt->interp, sbuff);
-                }
-                break;
-            case JULE_TK_STRING:
-                JULE_ASSERT(tk_start[0] == '"' && "string doesn't start with quote");
-                tk_start += 1;
-
-                sbuff = alloca(tk_end - tk_start + 1);
-                slen  = 0;
-
-                for (; tk_start < tk_end; tk_start += 1) {
-                    c = *tk_start;
-
-                    if (c == '"') { break; }
-                    if (c == '\\') {
-                        tk_start += 1;
-                        if (tk_start < tk_end) {
-                            c = *tk_start;
-                            switch (c) {
-                                case '\\':
-                                    break;
-                                case 'n':
-                                    c = '\n';
-                                    break;
-                                case 'r':
-                                    c = '\r';
-                                    break;
-                                case 't':
-                                    c = '\t';
-                                    break;
-                                case '"':
-                                    c = '"';
-                                    break;
-                                default:
-                                    goto add_char;
-                            }
-                        }
-                        goto add_char;
-                    } else {
-add_char:;
-                        sbuff[slen] = c;
-                    }
-                    slen += 1;
-                }
-
-                sbuff[slen] = 0;
-
-                val = jule_string_value(cxt->interp, sbuff);
-                break;
-            case JULE_TK_NUMBER:
-                strncpy(d_copy, tk_start, tk_end - tk_start);
-                d_copy[tk_end - tk_start] = 0;
-                sscanf(d_copy, "%lg", &d);
-                val = jule_number_value(d);
-                break;
-            case JULE_TK_EOS_ERR:
-                PARSE_ERR_RET(cxt->interp, JULE_ERR_UNEXPECTED_EOS, cxt->line, col + (tk_end - tk_start));
-                break;
-            default:
-                break;
-        }
-
-        JULE_ASSERT(val != NULL);
-
-        val->ind_level = ind;
-        val->line      = cxt->line;
-        val->col       = col;
-
-        if (first || p) {
+    val = NULL;
+    while ((status = jule_parse_next_value(cxt, &val, &tk)) == JULE_SUCCESS && val != NULL) {
+        if (first) {
             if (top != NULL) {
-                jule_ensure_top_is_tree(cxt);
+                jule_ensure_top_is_line_leader(cxt);
                 top->eval_values = jule_push(top->eval_values, val);
             } else {
                 cxt->roots = jule_push(cxt->roots, val);
@@ -1622,34 +2009,28 @@ add_char:;
             cxt->stack = jule_push(cxt->stack, val);
             top = val;
         } else {
-            jule_ensure_top_is_tree(cxt);
+            jule_ensure_top_is_line_leader(cxt);
             top->eval_values = jule_push(top->eval_values, val);
         }
 
-        p     = 0;
         first = 0;
+    }
 
-next_token:;
+    if (status != JULE_SUCCESS) {
+        PARSE_ERR_RET(cxt->interp, status, cxt->line, cxt->col);
+    }
 
-        col += tk_end - tk_start;
-    } while ((ws = jule_trim_leading_ws(cxt)) > 0 || (PEEK_CHAR(cxt, c), c == ')') || tk == JULE_TK_LPAREN);
-
-    if (jule_consume_comment(cxt)) { goto done; }
-
+eol:;
     if (PEEK_CHAR(cxt, c)) {
         if (c == '\n') {
             NEXT(cxt);
         } else {
-            PARSE_ERR_RET(cxt->interp, JULE_ERR_UNEXPECTED_TOK, cxt->line, col);
+            PARSE_ERR_RET(cxt->interp, JULE_ERR_UNEXPECTED_TOK, cxt->line, cxt->col);
         }
     }
 
 done:;
-    if (plevel) {
-        PARSE_ERR_RET(cxt->interp, JULE_ERR_MISSING_RPAREN, cxt->line, col);
-    }
-
-    return JULE_SUCCESS;
+    return status;
 }
 
 static void _jule_string_print(Jule_Interp *interp, char **buff, int *len, int *cap, const Jule_Value *value, unsigned ind, int flags) {
@@ -1683,7 +2064,7 @@ do {                                            \
 
 #define PUSHS(_s) PUSHSN((_s), strlen(_s))
 
-    if (value->type != _JULE_TREE) {
+    if ((value->type != _JULE_TREE) && (value->type != _JULE_TREE_LINE_LEADER)) {
         for (i = 0; i < ind; i += 1) { PUSHC(' '); }
     }
 
@@ -1711,10 +2092,10 @@ do {                                            \
             break;
         case JULE_LIST:
             PUSHC('[');
-            PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+            PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             FOR_EACH(value->list, child) {
-                _jule_string_print(interp, buff, len, cap, child, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
-                PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+                _jule_string_print(interp, buff, len, cap, child, (flags & JULE_MULTILINE) ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
+                PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             }
             if (flags & JULE_MULTILINE) {
                 for (i = 0; i < ind; i += 1) { PUSHC(' '); }
@@ -1723,12 +2104,12 @@ do {                                            \
             break;
         case JULE_OBJECT:
             PUSHC('{');
-            PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+            PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             hash_table_traverse((_Jule_Object)value->object, key, val) {
-                _jule_string_print(interp, buff, len, cap, key, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
+                _jule_string_print(interp, buff, len, cap, key, (flags & JULE_MULTILINE) ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
                 PUSHC(':');
-                _jule_string_print(interp, buff, len, cap, *val, flags & JULE_MULTILINE ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
-                PUSHC(flags & JULE_MULTILINE ? '\n' : ' ');
+                _jule_string_print(interp, buff, len, cap, *val, (flags & JULE_MULTILINE) ? ind + 2 : 0, flags & ~JULE_NO_QUOTE);
+                PUSHC((flags & JULE_MULTILINE) ? '\n' : ' ');
             }
             if (flags & JULE_MULTILINE) {
                 for (i = 0; i < ind; i += 1) { PUSHC(' '); }
@@ -1736,6 +2117,7 @@ do {                                            \
             PUSHC('}');
             break;
         case _JULE_TREE:
+        case _JULE_TREE_LINE_LEADER:
         case _JULE_FN:
             _jule_string_print(interp, buff, len, cap, value->eval_values->data[0], ind, flags & ~JULE_NO_QUOTE);
             for (i = 1; i < jule_len(value->eval_values); i += 1) {
@@ -1809,7 +2191,12 @@ static Jule_Status jule_parse_nodes(Jule_Interp *interp, const char *str, int si
     status = JULE_SUCCESS;
     while (status == JULE_SUCCESS && MORE_INPUT(&cxt)) {
         cxt.line += 1;
-        status    = jule_parse_line(&cxt);
+
+        if (cxt.line >= (1 << JULE_MAX_LINE_POT)) {
+            PARSE_ERR_RET(cxt.interp, JULE_ERR_TOO_MANY_LINES, cxt.line, 1);
+        }
+
+        status = jule_parse_line(&cxt);
     }
 
     FOR_EACH(cxt.roots, it) {
@@ -1996,7 +2383,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
 
     save_file = interp->cur_file;
 
-    if (fn->type == _JULE_TREE) {
+    if (fn->type == _JULE_TREE || fn->type == _JULE_TREE_LINE_LEADER) {
         interp->cur_file = fn->eval_values->aux;
 
         status = jule_eval(interp, tree, &ev);
@@ -2010,7 +2397,7 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
 
         def_tree = jule_elem(fn->eval_values, 1);
 
-        if (def_tree->type == _JULE_TREE) {
+        if (def_tree->type == _JULE_TREE || def_tree->type == _JULE_TREE_LINE_LEADER) {
             n_params = jule_len(def_tree->eval_values) - 1;
             params   = (Jule_Value**)def_tree->eval_values->data + 1;
 
@@ -2102,12 +2489,16 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
+static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
+
 static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value **result) {
     Jule_Status   status;
     Jule_Value   *lookup;
     Jule_Value   *fn;
     Jule_Value  **arg_values;
     unsigned      n_args;
+    Jule_Value    builtin;
 
     status  = JULE_SUCCESS;
     *result = NULL;
@@ -2139,6 +2530,7 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
             switch (lookup->type) {
                 case JULE_SYMBOL:
                 case _JULE_TREE:
+                case _JULE_TREE_LINE_LEADER:
                     status = jule_eval(interp, lookup, result);
                     goto out;
                 case _JULE_FN:
@@ -2152,34 +2544,72 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
                     goto out;
 
             }
+            break;
+
         case _JULE_TREE:
+        case _JULE_TREE_LINE_LEADER:
             JULE_ASSERT(jule_len(value->eval_values) >= 1);
 
             fn = jule_elem(value->eval_values, 0);
-            if (fn->type != JULE_SYMBOL) {
-                status = JULE_ERR_NOT_A_FN;
-                jule_make_not_a_fn_error(interp, value, fn->type);
-                *result = NULL;
-                goto out;
+
+            if (fn->type == JULE_SYMBOL) {
+                if ((lookup = jule_lookup(interp, fn->symbol_id)) == NULL) {
+                    status = JULE_ERR_LOOKUP;
+                    jule_make_lookup_error(interp, value, fn->symbol_id);
+                    *result = NULL;
+                    goto out;
+                }
+                fn = lookup;
+            } else {
+                status = jule_eval(interp, fn, &fn);
+                if (status != JULE_SUCCESS) {
+                    *result = NULL;
+                    goto out;
+                }
             }
 
-            if ((lookup = jule_lookup(interp, fn->symbol_id)) == NULL) {
-                status = JULE_ERR_LOOKUP;
-                jule_make_lookup_error(interp, value, fn->symbol_id);
-                *result = NULL;
-                goto out;
+            switch (fn->type) {
+                case _JULE_FN:
+                case _JULE_BUILTIN_FN:
+                    arg_values = (Jule_Value**)value->eval_values->data + 1;
+                    n_args     = jule_len(value->eval_values) - 1;
+                    break;
+
+                case JULE_LIST:
+                    if (jule_len(value->eval_values) != 2) { goto notafn; }
+
+                    memcpy(&builtin, fn, sizeof(builtin));
+                    builtin.type       = _JULE_BUILTIN_FN;
+                    builtin.builtin_fn = jule_builtin_elem;
+
+                    fn = &builtin;
+
+                    arg_values = (Jule_Value**)value->eval_values->data;
+                    n_args     = jule_len(value->eval_values);
+                    break;
+
+                case JULE_OBJECT:
+                    if (jule_len(value->eval_values) != 2) { goto notafn; }
+
+                    memcpy(&builtin, fn, sizeof(builtin));
+                    builtin.type       = _JULE_BUILTIN_FN;
+                    builtin.builtin_fn = jule_builtin_field;
+
+                    fn = &builtin;
+
+                    arg_values = (Jule_Value**)value->eval_values->data;
+                    n_args     = jule_len(value->eval_values);
+                    break;
+
+                default:;
+notafn:;
+                    status = JULE_ERR_BAD_INVOKE;
+                    jule_make_bad_invoke_error(interp, value, fn->type);
+                    *result = NULL;
+                    goto out;
+                    break;
             }
 
-            if (lookup->type != _JULE_FN && lookup->type != _JULE_BUILTIN_FN) {
-                status = JULE_ERR_NOT_A_FN;
-                jule_make_not_a_fn_error(interp, value, lookup->type);
-                *result = NULL;
-                goto out;
-            }
-
-            fn          = lookup;
-            arg_values  = (Jule_Value**)value->eval_values->data + 1;
-            n_args      = jule_len(value->eval_values) - 1;
 invoke:;
             fn->line = value->line; /* @bad */
             fn->col  = value->col; /* @bad */
@@ -2190,6 +2620,7 @@ invoke:;
                 goto out;
             }
             break;
+
         default:
             JULE_ASSERT(0);
             break;
@@ -2300,6 +2731,9 @@ static Jule_Status jule_args(Jule_Interp *interp, Jule_Value *tree, const char *
 
             /* Fine. */
         } else if (t == _JULE_KEYLIKE && JULE_TYPE_IS_KEYLIKE((*ve_ptr)->type)) {
+
+            /* Fine. */
+        } else if (t == _JULE_TREE && ((*ve_ptr)->type == _JULE_TREE || (*ve_ptr)->type == _JULE_TREE_LINE_LEADER)) {
 
             /* Fine. */
         } else if (t >= 0 && (*ve_ptr)->type != t) {
@@ -2478,7 +2912,7 @@ static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, unsign
 
     def_tree = values[0];
 
-    if (def_tree->type == _JULE_TREE) {
+    if (def_tree->type == _JULE_TREE || def_tree->type == _JULE_TREE_LINE_LEADER) {
         FOR_EACH(def_tree->eval_values, it) {
             if (it->type != JULE_SYMBOL) {
                 status = JULE_ERR_TYPE;
@@ -2588,6 +3022,7 @@ static Jule_Status jule_builtin_id(Jule_Interp *interp, Jule_Value *tree, unsign
         case JULE_LIST:
         case JULE_OBJECT:
         case _JULE_TREE:
+        case _JULE_TREE_LINE_LEADER:
             status = jule_eval(interp, value, &ev);
             if (status != JULE_SUCCESS) {
                 *result = NULL;
@@ -4305,13 +4740,51 @@ static Jule_Status jule_builtin_sorted(Jule_Interp *interp, Jule_Value *tree, un
         sort_arg.interp    = interp;
         sort_arg.sort_type = sort_type;
 
-        qsort_r(sorted->list->data, sorted->list->len, sizeof(*(sorted->list->data)), jule_sort_value_cmp, &sort_arg);
+        sort_r(sorted->list->data, sorted->list->len, sizeof(*(sorted->list->data)), jule_sort_value_cmp, &sort_arg);
     }
 
     *result = sorted;
 
 out_free:;
     jule_free_value(list);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_iso_date(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    int         status;
+    Jule_Value *s;
+    struct tm   tm;
+    const char *weekdays[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+
+    status = jule_args(interp, tree, "s", n_values, values, &s);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    memset(&tm, 0, sizeof(tm));
+    if (strptime(jule_get_string(interp, s->string_id)->chars, "%F %H:%M:%S", &tm) == NULL) {
+        *result = jule_nil_value();
+        goto out_free;
+    }
+
+    *result = jule_object_value();
+
+    jule_insert(*result, jule_string_value(interp, "seconds"), jule_number_value(tm.tm_sec));
+    jule_insert(*result, jule_string_value(interp, "minutes"), jule_number_value(tm.tm_min));
+    jule_insert(*result, jule_string_value(interp, "hours"),   jule_number_value(tm.tm_hour));
+    jule_insert(*result, jule_string_value(interp, "day"),     jule_number_value(tm.tm_mday));
+    jule_insert(*result, jule_string_value(interp, "wday"),    jule_string_value(interp, weekdays[tm.tm_wday % 7]));
+    jule_insert(*result, jule_string_value(interp, "yday"),    jule_number_value(1 + tm.tm_yday));
+    jule_insert(*result, jule_string_value(interp, "month"),   jule_number_value(1 + tm.tm_mon));
+    jule_insert(*result, jule_string_value(interp, "year"),    jule_number_value(1900 + tm.tm_year));
+    jule_insert(*result, jule_string_value(interp, "dst"),     jule_number_value(tm.tm_isdst));
+    jule_insert(*result, jule_string_value(interp, "epoch"),   jule_number_value(mktime(&tm)));
+
+out_free:;
+    jule_free_value(s);
 
 out:;
     return status;
@@ -4422,6 +4895,7 @@ static Jule_Status jule_builtin_len(Jule_Interp *interp, Jule_Value *tree, unsig
             *result = jule_number_value(hash_table_len((_Jule_Object)ev->object));
             break;
         case _JULE_TREE:
+        case _JULE_TREE_LINE_LEADER:
             *result = jule_number_value(jule_len(ev->eval_values));
             break;
         case _JULE_BUILTIN_FN:
@@ -4526,6 +5000,7 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
     JULE_INSTALL_FN("keys",          jule_builtin_keys);
     JULE_INSTALL_FN("values",        jule_builtin_values);
     JULE_INSTALL_FN("sorted",        jule_builtin_sorted);
+    JULE_INSTALL_FN("iso-date",      jule_builtin_iso_date);
     JULE_INSTALL_FN("eval-file",     jule_builtin_eval_file);
 
 #undef JULE_INSTALL_FN

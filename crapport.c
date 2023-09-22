@@ -157,6 +157,7 @@ static array_t            experiments;
 static array_t            experiments_working;
 static pthread_mutex_t    experiments_lock = PTHREAD_MUTEX_INITIALIZER;
 static Experiment         layout;
+static Experiment         working_layout;
 static tp_t              *tp;
 static int                loading;
 static yed_syntax         syn;
@@ -197,6 +198,7 @@ static void free_exp(Experiment *exp) {
             }
         }
         hash_table_free(exp->props);
+        exp->props = NULL;
     }
 }
 
@@ -209,6 +211,9 @@ static void free_all(void) {
     DBG("tearing down existing tables and threads");
 
     pthread_mutex_lock(&experiments_lock);
+
+    free_exp(&working_layout);
+    free_exp(&layout);
 
     array_traverse(experiments, exp) {
         free_exp(exp);
@@ -916,7 +921,7 @@ static void update_buffer(void) {
     free_exp(&layout);
     init_exp(&layout);
 
-    array_traverse(experiments_working, it) {
+    array_traverse(experiments, it) {
         hash_table_traverse(it->props, key, val) {
             new_val.type   = NUMBER;
             new_val.number = MAX(strlen(key), value_width(val));
@@ -929,13 +934,29 @@ static void update_buffer(void) {
         }
     }
 
+    free_exp(&working_layout);
+    init_exp(&working_layout);
+
+    array_traverse(experiments_working, it) {
+        hash_table_traverse(it->props, key, val) {
+            new_val.type   = NUMBER;
+            new_val.number = MAX(strlen(key), value_width(val));
+
+            if ((lookup = hash_table_get_val(working_layout.props, key)) == NULL) {
+                hash_table_insert(working_layout.props, strdup(key), new_val);
+            } else {
+                lookup->number = MAX(lookup->number, new_val.number);
+            }
+        }
+    }
+
     keys = get_keys();
 
     row = 1;
     col = 2;
     array_traverse(keys, key_it) {
         key   = *key_it;
-        val   = hash_table_get_val(layout.props, *key_it);
+        val   = hash_table_get_val(working_layout.props, *key_it);
         if (val == NULL) { continue; }
 
         width = (int)val->number;
@@ -977,7 +998,7 @@ static void update_buffer(void) {
         lazy_bar = "";
         array_traverse(keys, key_it) {
             key = *key_it;
-            val = hash_table_get_val(layout.props, key);
+            val = hash_table_get_val(working_layout.props, key);
 
             if (val == NULL) { continue; }
 
@@ -1119,7 +1140,7 @@ static void jule_error_cb(Jule_Error_Info *info) {
             snprintf(buff, sizeof(buff), " (wanted number or string, got %s)", jule_type_string(info->got_type));
             jule_output_cb(buff, strlen(buff));
             break;
-        case JULE_ERR_NOT_A_FN:
+        case JULE_ERR_BAD_INVOKE:
             snprintf(buff, sizeof(buff), " (got %s)", jule_type_string(info->got_type));
             jule_output_cb(buff, strlen(buff));
             break;
@@ -1729,6 +1750,8 @@ static void update_jule(void) {
             err_fixed = 1;
 
             draw_error_message(0);
+
+            update_buffer();
 
             snprintf(jule_file_buff, sizeof(jule_file_buff), "%s", name);
 

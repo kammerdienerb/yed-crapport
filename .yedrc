@@ -1,2 +1,4 @@
 set ctags-additional-paths '~/projects/yed/src/* ~/projects/jule/jule.h'
 plugins-add-dir .
+plugin-load crapport
+crapport-load

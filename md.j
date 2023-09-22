@@ -2,15 +2,15 @@ set md:__kwdargs__
     quote
         foreach var (keys KWDARGS)
             elocal
-                symbol var
-                field  KWDARGS var
+                symbol  var
+                KWDARGS var
 
 fn (md:unique-column-values column)
     do
         local values object
         foreach row @table
             if (and (in row column))
-                insert values (field row column) nil
+                insert values (row column) nil
         keys values
 
 fn (md:avg-metric KWDARGS)
@@ -24,9 +24,12 @@ fn (md:avg-metric KWDARGS)
         local donorm (in KWDARGS "norm")
         local normgroup nil
         if (and donorm (len groups))
-            local normgroup (elem groups 0)
+            local normgroup (groups 0)
 
-        localfn (collect-groups groups metric normgroup norm match)
+        if (not (in KWDARGS "extraname"))
+            local extraname nil
+
+        localfn (collect-groups groups metric normgroup norm match extraname)
             do
                 local out object
                 if (empty groups)
@@ -52,16 +55,16 @@ fn (md:avg-metric KWDARGS)
                                                     in row metric
                                                     in row column
                                                     ==
-                                                        field row       column
-                                                        field normmatch column
+                                                        row       column
+                                                        normmatch column
                                         if matches
                                             then
                                                 insert base "__sum__"
-                                                    + (field base "__sum__") (field row metric)
+                                                    + (base "__sum__") (row metric)
                                                 insert base "__count__"
-                                                    + (field base "__count__") 1
+                                                    + (base "__count__") 1
                                 insert base metric
-                                    / (field base "__sum__") (field base "__count__")
+                                    / (base "__sum__") (base "__count__")
 
                         local out
                             object
@@ -77,24 +80,27 @@ fn (md:avg-metric KWDARGS)
                                             in row metric
                                             in row column
                                             ==
-                                                field row   column
-                                                field match column
+                                                row   column
+                                                match column
                                 if matches
                                     then
                                         insert out "__sum__"
-                                            + (field out "__sum__") (field row metric)
+                                            + (out "__sum__") (row metric)
                                         insert out "__count__"
-                                            + (field out "__count__") 1
+                                            + (out "__count__") 1
 
                         insert out metric
-                            / (field out "__sum__") (field out "__count__")
+                            / (out "__sum__") (out "__count__")
 
                         if (!= nil base)
                             then
                                 insert out metric
-                                    / (field out metric) (field base metric)
+                                    / (out metric) (base metric)
+                        if (!= nil extraname)
+                            then
+                                insert out extraname (out metric)
                     else
-                        local group (elem groups 0)
+                        local group (groups 0)
                         erase groups 0
 
                         foreach value (md:unique-column-values group)
@@ -104,7 +110,7 @@ fn (md:avg-metric KWDARGS)
                                         if (not (in out value))
                                             update-object match (object (. group value))
 
-                                        insert out value (collect-groups groups metric normgroup norm match)
+                                        insert out value (collect-groups groups metric normgroup norm match extraname)
                 out
 
-        collect-groups groups metric normgroup (if donorm norm nil) object
+        collect-groups groups metric normgroup (if donorm norm nil) object extraname
