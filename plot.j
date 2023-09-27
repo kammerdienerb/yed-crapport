@@ -1,7 +1,7 @@
 set plot:colors
     list
-        @color "&active"
         @color "&active.bg swap"
+        @color "&active"
         @color "&code-fn-call"
         @color "&code-keyword"
         @color "&code-string"
