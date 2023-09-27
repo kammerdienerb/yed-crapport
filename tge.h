@@ -1629,7 +1629,7 @@ static inline void _tge_canvas_widget_paint(TGE_Game *game, TGE_Widget *widget) 
     attrs.flags |= ATTR_BOLD;
     yed_set_attr(attrs);
     yed_set_cursor(widget->hitbox_top, widget->hitbox_left);
-    yed_screen_print_n(canvas->title, MIN(strlen(canvas->title), widget->hitbox_width));
+    yed_screen_print_n(canvas->title, MIN((int)strlen(canvas->title), widget->hitbox_width));
 
     array_traverse(canvas->labels, label) {
         yed_set_attr(label->attrs);

@@ -141,11 +141,13 @@ void         jule_free(Jule_Interp *interp);
 #endif
 
 #define _GNU_SOURCE
+#define _XOPEN_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h> /* strlen, memcpy, memset, memcmp */
 #include <stdarg.h>
+#include <alloca.h>
 #include <math.h>
 #include <time.h>
 #include <sys/stat.h>
@@ -4765,7 +4767,7 @@ static Jule_Status jule_builtin_iso_date(Jule_Interp *interp, Jule_Value *tree, 
     }
 
     memset(&tm, 0, sizeof(tm));
-    if (strptime(jule_get_string(interp, s->string_id)->chars, "%F %H:%M:%S", &tm) == NULL) {
+    if (strptime(jule_get_string(interp, s->string_id)->chars, "%FT%T%z", &tm) == NULL) {
         *result = jule_nil_value();
         goto out_free;
     }
