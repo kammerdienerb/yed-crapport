@@ -2100,6 +2100,9 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
     int                x;
     int                y;
     char               buff[128];
+    int                i;
+    int                len;
+    int                label_x_off;
 
     canvas              = widget->data;
     screen              = &canvas->screen;
@@ -2107,9 +2110,9 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
     plot_height         = plot->ymax - plot->ymin;
     inner_screen_width  = (int)((1.0 - plot->axis_pad) * plot->width);
     inner_screen_height = (int)((1.0 - plot->axis_pad) * plot->height);
-    min_screen_x        = inner_screen_width;
     x_axis_x            = (int)(plot->axis_pad * plot->width);
     y_axis_y            = plot->height - (int)(plot->axis_pad * plot->height);
+    min_screen_x        = plot->width;
     screen_size         = MAX(1, (int)((group->size / plot_width) * inner_screen_width));
 
     if (inner_screen_height <= 0 || inner_screen_width <= 0) { return; }
@@ -2206,14 +2209,25 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
                         ? min_screen_x
                         : TO_SCREEN_X(group->labelx);
         screen_y = isnan(group->labely)
-                        ? inner_screen_height + 4 + ((idx & 1) * 2)
+                        ? inner_screen_height + 2 + ((idx % 4) * 2)
                         : TO_SCREEN_Y(group->labely);
 
-        if (plot->type == PLOT_BAR && idx & 1 && isnan(group->labely)) {
-            tge_canvas_widget_add_label(widget, screen_x, screen_y - 2, "|", group->color, -1, TGE_LABEL_BOLD);
+
+        if (plot->type == PLOT_BAR && isnan(group->labely)) {
+            for (i = 0; i < idx % 4; i += 1) {
+                tge_canvas_widget_add_label(widget, screen_x, screen_y - (2 * (1 + i)), "│", group->color, -1, TGE_LABEL_BOLD);
+            }
         }
+
+        len         = strlen(group->label);
+        label_x_off = 0;
+
+        if (screen_x + (len / 2) >= plot->width) {
+            label_x_off = (screen_x + (len / 2)) - plot->width + 1;
+        }
+
         tge_canvas_widget_add_label(widget,
-                                    screen_x - (strlen(group->label) / 2),
+                                    screen_x - (len / 2) - label_x_off,
                                     screen_y,
                                     group->label,
                                     plot->invert_labels ? plot->bg     : group->color,
