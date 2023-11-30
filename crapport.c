@@ -150,6 +150,7 @@ typedef struct {
 typedef struct {
     double x;
     double y;
+    double error;
 } Plot_Point;
 
 static yed_plugin        *Self;
@@ -1100,10 +1101,12 @@ static void set_err(int has_loc, char *file, int line, int col, const char *msg)
 }
 
 static void jule_error_cb(Jule_Error_Info *info) {
-    Jule_Status  status;
-    char         buff[1024];
-    char         dd_buff[4096];
-    char        *s;
+    Jule_Status           status;
+    char                  buff[1024];
+    char                  dd_buff[4096];
+    char                 *s;
+    unsigned              i;
+    Jule_Backtrace_Entry *it;
 
     status = info->status;
 
@@ -1156,6 +1159,10 @@ static void jule_error_cb(Jule_Error_Info *info) {
             snprintf(buff, sizeof(buff), " (%s)", info->path);
             jule_output_cb(buff, strlen(buff));
             break;
+        case JULE_ERR_LOAD_PACKAGE_FAILURE:
+            snprintf(buff, sizeof(buff), " (%s) %s", info->path, info->package_error_message);
+            jule_output_cb(buff, strlen(buff));
+            break;
         default:
             break;
     }
@@ -1170,6 +1177,24 @@ static void jule_error_cb(Jule_Error_Info *info) {
 
     snprintf(buff, sizeof(buff), "\n");
     jule_output_cb(buff, strlen(buff));
+
+    if (jule_len(info->interp->backtrace) > 0) {
+        snprintf(buff, sizeof(buff), "backtrace:\n");
+        jule_output_cb(buff, strlen(buff));
+
+        for (i = jule_len(info->interp->backtrace); i > 0; i -= 1) {
+            it = jule_elem(info->interp->backtrace, i - 1);
+
+            s = jule_to_string(info->interp, it->fn, 0);
+            snprintf(buff, sizeof(buff), "    %s:%u:%u %s\n",
+                    it->file == NULL ? "<?>" : it->file->chars,
+                    it->fn->line,
+                    it->fn->col,
+                    s);
+            JULE_FREE(s);
+            jule_output_cb(buff, strlen(buff));
+        }
+    }
 
     jule_free_error_info(info);
 }
@@ -1367,6 +1392,7 @@ static Jule_Status j_plot(Jule_Interp *interp, Jule_Value *tree, unsigned n_valu
     Jule_Value        *point;
     Jule_Value        *x;
     Jule_Value        *y;
+    Jule_Value        *error;
 
     status = jule_args(interp, tree, "o", n_values, values, &object);
     if (status != JULE_SUCCESS) {
@@ -1490,11 +1516,13 @@ do {                                                              \
                     if (point->type != JULE_OBJECT) { continue; }
                     memset(&plot_point, 0, sizeof(plot_point));
 
-                    GET_FIELD(x, point, "x", JULE_NUMBER);
-                    GET_FIELD(y, point, "y", JULE_NUMBER);
+                    GET_FIELD(x,     point, "x",     JULE_NUMBER);
+                    GET_FIELD(y,     point, "y",     JULE_NUMBER);
+                    GET_FIELD(error, point, "error", JULE_NUMBER);
 
-                    plot_point.x = x == NULL ? 0 : x->number;
-                    plot_point.y = y == NULL ? 0 : y->number;
+                    plot_point.x     = x     == NULL ? 0 : x->number;
+                    plot_point.y     = y     == NULL ? 0 : y->number;
+                    plot_point.error = error == NULL ? 0 : error->number;
 
                     plot.xmin = xmin == NULL ? MIN(plot.xmin, plot_point.x) : plot.xmin;
                     plot.xmax = xmax == NULL ? MAX(plot.xmax, plot_point.x) : plot.xmax;
@@ -1629,7 +1657,7 @@ static void *jule_timeout_thread(void *arg) {
 
         now = measure_time_now_ms();
 
-        if (0 && now - jule_start_time_ms > 2500) {
+        if (now - jule_start_time_ms > 2500) {
             jule_abort = 1;
             break;
         }
@@ -2103,6 +2131,8 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
     int                i;
     int                len;
     int                label_x_off;
+    int                error_bar_top_y;
+    int                error_bar_bot_y;
 
     canvas              = widget->data;
     screen              = &canvas->screen;
@@ -2137,13 +2167,17 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
                 snprintf(buff, sizeof(buff), "%.3g", point->y);
             }
 
+            if (point->error != 0) {
+                snprintf(buff + strlen(buff), sizeof(buff) - strlen(buff), " ±%.3g", point->error);
+            }
+
             label_y_off = -2;
 
             if (plot->type == PLOT_BAR && point->y < 0) {
                 label_y_off *= -1;
             }
 
-            tge_canvas_widget_add_label(widget, screen_x - (strlen(buff) / 2), screen_y + label_y_off, buff, plot->fg, -1, 0);
+            tge_canvas_widget_add_label(widget, screen_x - (yed_get_string_width(buff) / 2), screen_y + label_y_off, buff, plot->fg, -1, 0);
         }
 
         switch (plot->type) {
@@ -2199,6 +2233,28 @@ static void tge_point_group(TGE_Widget *widget, Plot *plot, Plot_Point_Group *gr
                     }
                 }
                 break;
+        }
+
+        if (point->error != 0) {
+            screen_y        = TO_SCREEN_Y(point->y);
+            error_bar_top_y = TO_SCREEN_Y(point->y + point->error);
+            error_bar_bot_y = TO_SCREEN_Y(point->y - point->error);
+
+            if (error_bar_top_y != error_bar_bot_y) {
+                if (!plot->point_labels
+                ||    (((((error_bar_top_y >> 1) << 1) != ((screen_y >> 1) << 1)))
+                    && ((((error_bar_top_y >> 1) << 1) != (((screen_y + label_y_off) >> 1) << 1))))) {
+                    tge_canvas_widget_add_label(widget, screen_x - 1, error_bar_top_y, "─┬─", plot->fg, -1, 0);
+                    for (y = ((error_bar_top_y >> 1) << 1) + 2; y < ((error_bar_bot_y >> 1) << 1); y += 2) {
+                        if (y > inner_screen_height || y < 0) { break; }
+                        if (y != ((screen_y >> 1) << 1)
+                        &&  y != (((screen_y + label_y_off) >> 1) << 1)) {
+                            tge_canvas_widget_add_label(widget, screen_x, y, "│", plot->fg, -1, 0);
+                        }
+                    }
+                    tge_canvas_widget_add_label(widget, screen_x - 1, error_bar_bot_y, "─┴─", plot->fg, -1, 0);
+                }
+            }
         }
 
         last_point = point;

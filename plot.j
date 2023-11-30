@@ -1,3 +1,5 @@
+use-package "math"
+
 set plot:colors
     list
         @color "&active.bg swap"
@@ -26,63 +28,64 @@ fn (plot:set-colors colors)
 set plot:__kwdargs__
     quote
         foreach var (keys KWDARGS)
-            elocal
-                symbol  var
-                KWDARGS var
+            elocal (symbol var) (KWDARGS var)
 
 fn (plot:bar-2d KWDARGS)
-    do
-        # point-objects: Object with a set of objects to plot. Each element object should have a field "y".
-        # order:         List of keys of point-objects, which dicatates the order of plotted points. (optional)
-        md:__kwdargs__
+    # point-objects: Object with a set of objects to plot. Each element object should have a field "y" (and optionally, "error").
+    # order:         List of keys of point-objects, which dicatates the order of plotted points. (optional)
+    md:__kwdargs__
 
 
-        if (not (in KWDARGS "order"))
-            local order (keys point-objects)
+    if (not (in KWDARGS "order"))
+        local order (keys point-objects)
 
-        local plot
+    local plot
+        object
+            . "type"         "bar"
+            . "groups"       list
+            . "fg"           (plot:colors 0)
+            . "bg"           (plot:colors 1)
+            . "point-labels" 1
+
+    local i    0
+    local x    0.5
+    local ymax -9999999999
+
+    foreach key order
+        local point (point-objects key)
+        local y     (point "y")
+
+        if (> y ymax)
+            local ymax y
+
+        local plot-point
+            object (. "x" x) (. "y" y)
+
+        if (in point "error")
+            insert plot-point "error" (point "error")
+
+        append (plot "groups")
             object
-                . "type"         "bar"
-                . "groups"       list
-                . "fg"           (plot:colors 0)
-                . "bg"           (plot:colors 1)
-                . "point-labels" 1
+                . "label"  key
+                . "size"   0.75
+                . "color"  (plot:colors (+ i 2))
+                . "points" (list plot-point)
 
-        local i    0
-        local x    0.5
-        local ymax -9999999999
+        local i (+ i 1)
+        local x (+ x 1)
 
-        foreach key order
-            do
-                local point (point-objects key)
-                local y     (point "y")
+    insert plot "xmax" (- x 0.5)
 
-                if (> y ymax)
-                    local ymax y
+    local j    0
+    local ypow ymax
+    while (> ypow 10)
+        local ypow (/ ypow 10)
+        local j    (+ j 1)
 
-                append (plot "groups")
-                    object
-                        . "label"  key
-                        . "size"   0.75
-                        . "color"  (plot:colors (+ i 2))
-                        . "points" (list (object (. "x" x) (. "y" y)))
+    local ymaxbase (+ (math:floor ypow) 1)
+    local ymax     (* ymaxbase (math:pow 10 j))
 
-                local i (+ i 1)
-                local x (+ x 1)
+    insert plot "ymax"   ymax
+    insert plot "ymarks" ymaxbase
 
-        insert plot "xmax" (- x 0.5)
-
-        local j    0
-        local ypow ymax
-        while (> ypow 10)
-            do
-                local ypow (/ ypow 10)
-                local j    (+ j 1)
-
-        local ymaxbase (+ (floor ypow) 1)
-        local ymax     (* ymaxbase (pow 10 j))
-
-        insert plot "ymax"   ymax
-        insert plot "ymarks" ymaxbase
-
-        plot
+    plot

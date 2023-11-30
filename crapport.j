@@ -1,42 +1,63 @@
+add-package-directory "~/projects/jule/packages"
+
+map (` use-package) (list "date" "math" "stats")
+map (` eval-file)   (list "md.j" "plot.j")
+
 println (fmt "*** CRAPPORT (% rows, % columns) ***" (len @table) (len @columns))
 
-@display-columns "run_config" "runtime" "lulesh_FOM" "amg_FOM" "date"
+# @display-columns "date" "benchmark" "run_config" "policy_rank_string" "apb_nice_regex" "policy_pack_string" "runtime" "lulesh_FOM" "amg_FOM"
+@display-columns "crapport_dirname" "run_config" "policy_rank_string" "apb_nice_regex" "policy_pack_string" "pack_nice_regex" "pack_purge_percent" "runtime" "qmc_time" "amg_FOM"
 
-eval-file "md.j"
-eval-file "plot.j"
 
-fn (date-is-after d1 d2) (> (d1 "epoch") (d2 "epoch"))
+fn (date-before month day)
+    or (< ((date:parse-iso (@row "date")) "month") month)
+       (< ((date:parse-iso (@row "date")) "day")   day)
+
+# @filter
+#     and
+#         == (@row "benchmark") "qmcpack_and_lulesh"
+#         not (date-before 10 5)
 
 @filter
-    date-is-after
-        iso-date (@row "date")
-        iso-date "2023-09-18 0:0:0"
+    and
+        != nil (@row "amg_FOM")
+        == (@row "benchmark") "qmcpack_and_amg"
+        or (!= (@row "run_config") "mdrun") (== (@row "policy_rank_string") "lru")
+# @filter
+#     or
+#         (< ((date:parse-iso (@row "date")) "month") 10)
+#         (< ((date:parse-iso (@row "date")) "day")   5)
 
-foreach row @table
-    insert row "name"
-        if (== (row "run_config") "mdrun")
-            (row "policy_pack_string")
-            (row "run_config")
 
-foreach metric (list "runtime" "lulesh_FOM" "amg_FOM")
-    do
-        set results
-            md:avg-metric
+
+
+
+if 0
+    foreach row @table
+        insert row "name"
+            select (== (row "run_config") "mdrun")
+                fmt "% (%\%)" (row "policy_pack_string") (row "pack_purge_percent")
+                (row "run_config")
+
+    foreach metric (list "runtime" "qmc_time" "amg_FOM")
+        do
+            set results
+                md:avg-metric
+                    object
+                        . "metric"    metric
+                        . "groups"    (list "name")
+                        . "norm"      "sys_malloc_32"
+                        . "extraname" "y"
+
+            set plot-args
                 object
-                    . "metric"    metric
-                    . "groups"    (list "name")
-                    . "norm"      "sys_malloc_32"
-                    . "extraname" "y"
+                    . "point-objects" results
+                    . "order"         (sorted (keys results))
 
-        set plot-args
-            object
-                . "point-objects" results
-                . "order"         (sorted (keys results))
-
-        @plot
-            update-object (plot:bar-2d plot-args)
-                object
-                    . "title"        metric
-                    . "ymax"         1.5
-                    . "ymarks"       3
-                    . "width"        100
+            @plot
+                update-object (plot:bar-2d plot-args)
+                    object
+                        . "title"        metric
+                        . "ymax"         1.75
+                        . "ymarks"       7
+                        . "width"        150

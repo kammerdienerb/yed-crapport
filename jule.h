@@ -1,28 +1,32 @@
 #ifndef __JULE_H__
 #define __JULE_H__
 
-#define _JULE_STATUS                                                                                                   \
-    _JULE_STATUS_X(JULE_SUCCESS,                    "No error.")                                                       \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,         "Unexpected end of input.")                                        \
-    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,         "Unexpected token.")                                               \
-    _JULE_STATUS_X(JULE_ERR_LINE_TOO_LONG,          "Token starts too far into a line (column too big).")              \
-    _JULE_STATUS_X(JULE_ERR_TOO_MANY_LINES,         "You have exceeded the maximum number of lines in a single file.") \
-    _JULE_STATUS_X(JULE_ERR_EXTRA_RPAREN,           "Extraneous closing parenthesis.")                                 \
-    _JULE_STATUS_X(JULE_ERR_MISSING_RPAREN,         "End of line while parentheses left open.")                        \
-    _JULE_STATUS_X(JULE_ERR_EMPTY_PARENS,           "Empty parentheses are not allowed.")                              \
-    _JULE_STATUS_X(JULE_ERR_NO_INPUT,               "Missing a top-level expression.")                                 \
-    _JULE_STATUS_X(JULE_ERR_LOOKUP,                 "Failed to find symbol.")                                          \
-    _JULE_STATUS_X(JULE_ERR_BAD_INVOKE,             "Invoked value is not something that can be invoked in this way.") \
-    _JULE_STATUS_X(JULE_ERR_ARITY,                  "Incorrect number of arguments.")                                  \
-    _JULE_STATUS_X(JULE_ERR_TYPE,                   "Incorrect argument type.")                                        \
-    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,        "Expression is not a valid key type.")                             \
-    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,            "Missing value expression.")                                       \
-    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,              "Field or element not found.")                                     \
-    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,         "Evaluation was cancelled.")                                       \
-    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,         "File not found.")                                                 \
-    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,            "File is a directory.")                                            \
-    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,            "mmap() failed.")                                                  \
-    _JULE_STATUS_X(JULE_ERR_RELEASE_WHILE_BORROWED, "Value released while a borrowed reference remains outstanding.")
+#define _JULE_STATUS                                                                                                            \
+    _JULE_STATUS_X(JULE_SUCCESS,                             "No error.")                                                       \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_EOS,                  "Unexpected end of input.")                                        \
+    _JULE_STATUS_X(JULE_ERR_UNEXPECTED_TOK,                  "Unexpected token.")                                               \
+    _JULE_STATUS_X(JULE_ERR_LINE_TOO_LONG,                   "Token starts too far into a line (column too big).")              \
+    _JULE_STATUS_X(JULE_ERR_TOO_MANY_LINES,                  "You have exceeded the maximum number of lines in a single file.") \
+    _JULE_STATUS_X(JULE_ERR_EXTRA_RPAREN,                    "Extraneous closing parenthesis.")                                 \
+    _JULE_STATUS_X(JULE_ERR_MISSING_RPAREN,                  "End of line while parentheses left open.")                        \
+    _JULE_STATUS_X(JULE_ERR_EMPTY_PARENS,                    "Empty parentheses are not allowed.")                              \
+    _JULE_STATUS_X(JULE_ERR_NO_INPUT,                        "Missing a top-level expression.")                                 \
+    _JULE_STATUS_X(JULE_ERR_LOOKUP,                          "Failed to find symbol.")                                          \
+    _JULE_STATUS_X(JULE_ERR_BAD_INVOKE,                      "Invoked value is not something that can be invoked in this way.") \
+    _JULE_STATUS_X(JULE_ERR_ARITY,                           "Incorrect number of arguments.")                                  \
+    _JULE_STATUS_X(JULE_ERR_TYPE,                            "Incorrect argument type.")                                        \
+    _JULE_STATUS_X(JULE_ERR_OBJECT_KEY_TYPE,                 "Expression is not a valid key type.")                             \
+    _JULE_STATUS_X(JULE_ERR_MISSING_VAL,                     "Missing value expression.")                                       \
+    _JULE_STATUS_X(JULE_ERR_BAD_INDEX,                       "Field or element not found.")                                     \
+    _JULE_STATUS_X(JULE_ERR_EVAL_CANCELLED,                  "Evaluation was cancelled.")                                       \
+    _JULE_STATUS_X(JULE_ERR_FILE_NOT_FOUND,                  "File not found.")                                                 \
+    _JULE_STATUS_X(JULE_ERR_FILE_IS_DIR,                     "File is a directory.")                                            \
+    _JULE_STATUS_X(JULE_ERR_MMAP_FAILED,                     "mmap() failed.")                                                  \
+    _JULE_STATUS_X(JULE_ERR_RELEASE_WHILE_BORROWED,          "Value released while a borrowed reference remains outstanding.")  \
+    _JULE_STATUS_X(JULE_ERR_LOAD_PACKAGE_FAILURE,            "Failed to load package.")                                         \
+    _JULE_STATUS_X(JULE_ERR_USE_PACKAGE_FORBIDDEN,           "use-package has been disabled.")                                  \
+    _JULE_STATUS_X(JULE_ERR_ADD_PACKAGE_DIRECTORY_FORBIDDEN, "add-package-directory has been disabled.")                        \
+    _JULE_STATUS_X(JULE_ERR_MUST_FOLLOW_IF,                  "this special-form function must follow `if` or `elif`")
 
 #define _JULE_STATUS_X(e, s) e,
 typedef enum { _JULE_STATUS } Jule_Status;
@@ -40,6 +44,7 @@ typedef enum { _JULE_STATUS } Jule_Status;
     _JULE_TYPE_X(_JULE_TREE_LINE_LEADER, "unevaluated expression")           \
     _JULE_TYPE_X(_JULE_FN,               "function")                         \
     _JULE_TYPE_X(_JULE_BUILTIN_FN,       "function (builtin)")               \
+    _JULE_TYPE_X(_JULE_LAMBDA,           "lambda")                           \
     _JULE_TYPE_X(_JULE_LIST_OR_OBJECT,   "list or object")                   \
     _JULE_TYPE_X(_JULE_KEYLIKE,          "keylike (string, number, or nil)")
 
@@ -70,6 +75,9 @@ typedef struct Jule_Array_Struct Jule_Array;
 struct Jule_Interp_Struct;
 typedef struct Jule_Interp_Struct Jule_Interp;
 
+struct Jule_Backtrace_Entry_Struct;
+typedef struct Jule_Backtrace_Entry_Struct Jule_Backtrace_Entry;
+
 typedef struct {
     int line;
     int col;
@@ -88,6 +96,7 @@ typedef struct {
     Jule_Value          *bad_index;
     char                *file;
     char                *path;
+    char                *package_error_message;
 } Jule_Error_Info;
 
 typedef void (*Jule_Error_Callback)(Jule_Error_Info *info);
@@ -104,6 +113,8 @@ Jule_Status  jule_init_interp(Jule_Interp *interp);
 Jule_Status  jule_set_error_callback(Jule_Interp *interp, Jule_Error_Callback cb);
 Jule_Status  jule_set_output_callback(Jule_Interp *interp, Jule_Output_Callback cb);
 Jule_Status  jule_set_eval_callback(Jule_Interp *interp, Jule_Eval_Callback cb);
+Jule_Status  jule_set_argv(Jule_Interp *interp, int argc, char **argv);
+Jule_Status  jule_load_package(Jule_Interp *interp, const char *name, Jule_Value **result);
 void         jule_free_error_info(Jule_Error_Info *info);
 Jule_Status  jule_parse(Jule_Interp *interp, const char *str, int size);
 Jule_Status  jule_interp(Jule_Interp *interp);
@@ -144,7 +155,7 @@ void         jule_free(Jule_Interp *interp);
 #define _GNU_SOURCE
 #endif
 #ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE 700
 #endif
 #include <stdlib.h>
 #include <stdio.h>
@@ -153,9 +164,11 @@ void         jule_free(Jule_Interp *interp);
 #include <stdarg.h>
 #include <alloca.h>
 #include <math.h>
-#include <time.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <dlfcn.h>
 
 #ifndef JULE_MALLOC
 #define JULE_MALLOC (malloc)
@@ -920,10 +933,10 @@ static inline Jule_String jule_strdup(Jule_String *s) {
 
 
 struct Jule_Array_Struct {
-    unsigned    len;
-    unsigned    cap;
-    const void *aux;
-    void       *data[];
+    unsigned  len;
+    unsigned  cap;
+    void     *aux;
+    void     *data[];
 };
 
 #define JULE_ARRAY_INIT        ((Jule_Array*)NULL)
@@ -937,7 +950,7 @@ static inline unsigned jule_len(Jule_Array *array) {
     return array == NULL ? 0 : array->len;
 }
 
-static inline Jule_Array *jule_array_set_aux(Jule_Array *array, const void *aux) {
+static inline Jule_Array *jule_array_set_aux(Jule_Array *array, void *aux) {
     if (array == NULL) {
         array = JULE_MALLOC(sizeof(Jule_Array) + (JULE_ARRAY_INITIAL_CAP * sizeof(void*)));
         array->len = 0;
@@ -1119,15 +1132,37 @@ typedef hash_table(Char_Ptr, Jule_String_ID) _Jule_String_Table;
 
 
 struct Jule_Interp_Struct {
-    Jule_Array           *roots;
-    Jule_Error_Callback   error_callback;
-    Jule_Output_Callback  output_callback;
-    Jule_Eval_Callback    eval_callback;
-    _Jule_String_Table    strings;
-    _Jule_Symbol_Table    symtab;
-    Jule_Array           *local_symtab_stack;
-    Jule_String_ID        cur_file;
+    Jule_Array            *roots;
+    Jule_Error_Callback    error_callback;
+    Jule_Output_Callback   output_callback;
+    Jule_Eval_Callback     eval_callback;
+    _Jule_String_Table     strings;
+    _Jule_Symbol_Table     symtab;
+    Jule_Array            *local_symtab_stack;
+    Jule_String_ID         cur_file;
+    int                    argc;
+    char                 **argv;
+    int                    use_package_forbidden;
+    int                    add_package_directory_forbidden;
+    Jule_Array            *package_dirs;
+    Jule_Array            *package_handles;
+    Jule_Array            *package_values;
+    Jule_Array            *backtrace;
+    Jule_Fn                last_popped_builtin_fn;
+    int                    last_if_was_true;
 };
+
+typedef struct Jule_Backtrace_Entry_Struct {
+    Jule_String_ID  file;
+    Jule_Value     *fn;
+} Jule_Backtrace_Entry;
+
+
+/* A lambda's eval_values->aux must point to a Jule_Closure_Info. */
+typedef struct Jule_Closure_Info_Struct {
+    Jule_String_ID     cur_file;
+    _Jule_Symbol_Table captures;
+} Jule_Closure_Info;
 
 
 static Jule_String_ID jule_get_string_id(Jule_Interp *interp, const char *s) {
@@ -1185,6 +1220,115 @@ Jule_Status jule_set_eval_callback(Jule_Interp *interp, Jule_Eval_Callback cb) {
     return JULE_SUCCESS;
 }
 
+Jule_Status jule_set_argv(Jule_Interp *interp, int argc, char **argv) {
+    interp->argc = argc;
+    interp->argv = argv;
+    return JULE_SUCCESS;
+}
+
+static Jule_Value *jule_copy_force(Jule_Value *value);
+
+Jule_Status jule_load_package(Jule_Interp *interp, const char *name, Jule_Value **result) {
+    Jule_Status         status;
+    const Jule_String  *dir;
+    unsigned            i;
+    char                buff[4096];
+    void               *handle;
+    unsigned            idx;
+    void               *it;
+    Jule_Value *      (*init)(Jule_Interp*);
+    Jule_Value         *val;
+
+    status = JULE_SUCCESS;
+
+    if (result != NULL) { *result = NULL; }
+
+    snprintf(buff, sizeof(buff), "./%s.so", name);
+
+    if (access(buff, F_OK) >= 0) {
+        handle = dlopen(buff, RTLD_LAZY);
+
+        if (handle == NULL) {
+            status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+            goto out;
+        } else {
+            goto found_handle;
+        }
+    }
+
+    if (jule_len(interp->package_dirs) > 0) {
+        for (i = jule_len(interp->package_dirs); i > 0; i -= 1) {
+            dir = jule_elem(interp->package_dirs, i - 1);
+
+            snprintf(buff, sizeof(buff), "%s/%s.so", dir->chars, name);
+
+            if (access(buff, F_OK) == -1) { continue; }
+
+            handle = dlopen(buff, RTLD_LAZY);
+
+            if (handle == NULL) {
+                status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+                goto out;
+            } else {
+                goto found_handle;
+            }
+        }
+    }
+
+    handle = dlopen(buff, RTLD_LAZY); /* get dl to create an error */
+    status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+    goto out;
+
+found_handle:;
+    idx = 0;
+    FOR_EACH(interp->package_handles, it) {
+        if (it == handle) {
+            dlclose(handle);
+            if (result != NULL) {
+                *result = jule_copy_force(jule_elem(interp->package_values, idx));
+            }
+            goto out;
+        }
+        idx += 1;
+    }
+    *(void**)(&init) = dlsym(handle, "jule_init_package");
+    if (init == NULL) {
+        *result = NULL;
+        status = JULE_ERR_LOAD_PACKAGE_FAILURE;
+        goto out;
+    }
+
+    val = init(interp);
+
+    interp->package_handles = jule_push(interp->package_handles, handle);
+    interp->package_values  = jule_push(interp->package_values,  val);
+
+    if (result != NULL) {
+        *result = jule_copy_force(val);
+    }
+
+out:;
+    return status;
+}
+
+Jule_Status jule_add_package_directory(Jule_Interp *interp, const char *path) {
+    char *home;
+    char  buff[4096];
+
+    if (path[0] == '~') {
+        home = getenv("HOME");
+
+        if (home != NULL) {
+            snprintf(buff, sizeof(buff), "%s%s", home, path + 1);
+            path = buff;
+        }
+    }
+
+    interp->package_dirs = jule_push(interp->package_dirs, (void*)jule_get_string(interp, jule_get_string_id(interp, path)));
+
+    return JULE_SUCCESS;
+}
+
 static void jule_free_value(Jule_Value *value);
 
 
@@ -1200,6 +1344,9 @@ void jule_free_error_info(Jule_Error_Info *info) {
     }
     if (info->path != NULL) {
         JULE_FREE(info->path);
+    }
+    if (info->package_error_message != NULL) {
+        JULE_FREE(info->package_error_message);
     }
 }
 
@@ -1292,9 +1439,11 @@ static inline int jule_value_is_freeable(Jule_Value *value) {
 }
 
 static void _jule_free_value(Jule_Value *value, int force) {
-    Jule_Value  *child;
-    Jule_Value  *key;
-    Jule_Value **val;
+    Jule_Value         *child;
+    Jule_Value         *key;
+    Jule_Value        **val;
+    Jule_Closure_Info  *closure;
+    Jule_String_ID      sym;
 
     JULE_ASSERT((!force || !value->borrow_count)
     && "why are we forcing a free of a borrowed value?");
@@ -1329,6 +1478,15 @@ static void _jule_free_value(Jule_Value *value, int force) {
             hash_table_free((_Jule_Object)value->object);
             value->object = NULL;
             break;
+        case _JULE_LAMBDA:
+            closure = value->eval_values->aux;
+            hash_table_traverse(closure->captures, sym, val) {
+                (void)sym;
+                _jule_free_value(*val, force);
+            }
+            hash_table_free(closure->captures);
+            JULE_FREE(closure);
+            /* fallthrough */
         case _JULE_TREE:
         case _JULE_TREE_LINE_LEADER:
         case _JULE_FN:
@@ -1418,12 +1576,15 @@ void jule_delete(Jule_Value *object, Jule_Value *key) {
 }
 
 static Jule_Value *_jule_copy(Jule_Value *value, int force) {
-    Jule_Value    *copy;
-    Jule_Array    *array = JULE_ARRAY_INIT;
-    Jule_Value    *child;
-    _Jule_Object   obj;
-    Jule_Value    *key;
-    Jule_Value   **val;
+    Jule_Value         *copy;
+    Jule_Array         *array = JULE_ARRAY_INIT;
+    Jule_Value         *child;
+    _Jule_Object        obj;
+    Jule_Value         *key;
+    Jule_Value        **val;
+    Jule_Closure_Info  *closure;
+    Jule_Closure_Info  *closure_cpy;
+    Jule_String_ID      sym;
 
     if (!force && (value->in_symtab)) { return value; }
 
@@ -1455,11 +1616,25 @@ static Jule_Value *_jule_copy(Jule_Value *value, int force) {
         case _JULE_TREE:
         case _JULE_TREE_LINE_LEADER:
         case _JULE_FN:
+        case _JULE_LAMBDA:
             FOR_EACH(copy->eval_values, child) {
                 array = jule_push(array, _jule_copy(child, force));
             }
             copy->eval_values = array;
-            copy->eval_values = jule_array_set_aux(copy->eval_values, value->eval_values->aux);
+            if (value->type == _JULE_LAMBDA) {
+                closure     = value->eval_values->aux;
+                closure_cpy = JULE_MALLOC(sizeof(*closure_cpy));
+
+                closure_cpy->cur_file = closure->cur_file;
+                closure_cpy->captures = hash_table_make(Jule_String_ID, Jule_Value_Ptr, jule_string_id_hash);
+
+                hash_table_traverse(closure->captures, sym, val) {
+                    hash_table_insert(closure_cpy->captures, sym, jule_copy_force(*val));
+                }
+                copy->eval_values = jule_array_set_aux(copy->eval_values, closure_cpy);
+            } else {
+                copy->eval_values = jule_array_set_aux(copy->eval_values, value->eval_values->aux);
+            }
             break;
         case _JULE_BUILTIN_FN:
             break;
@@ -1510,10 +1685,8 @@ static int jule_equal(Jule_Value *a, Jule_Value *b) {
                 if (!jule_equal(ia, ib)) { return 0; }
             }
             return 1;
-        case JULE_OBJECT:
-            JULE_ASSERT(0);
-            return 0;
         default:
+            /* @todo: all types should be covered here */
             JULE_ASSERT(0);
             break;
     }
@@ -1650,6 +1823,41 @@ static void jule_make_install_error(Jule_Interp *interp, Jule_Value *value, Jule
     jule_error(interp, &info);
 }
 
+static void jule_make_load_package_error(Jule_Interp *interp, Jule_Value *value, Jule_Status status, const char *path, const char *message) {
+    Jule_Error_Info info;
+    memset(&info, 0, sizeof(info));
+    info.interp                = interp;
+    info.status                = status;
+    info.location.line         = value->line;
+    info.location.col          = value->col;
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
+    info.path                  = jule_charptr_dup(path);
+    info.package_error_message = message == NULL ? "unknown error" : jule_charptr_dup(message);
+    jule_error(interp, &info);
+}
+
+static void jule_make_forbidden_error(Jule_Interp *interp, Jule_Value *value, Jule_Status status) {
+    Jule_Error_Info info;
+    memset(&info, 0, sizeof(info));
+    info.interp                = interp;
+    info.status                = status;
+    info.location.line         = value->line;
+    info.location.col          = value->col;
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
+    jule_error(interp, &info);
+}
+
+static void jule_make_must_follow_if_error(Jule_Interp *interp, Jule_Value *value) {
+    Jule_Error_Info info;
+    memset(&info, 0, sizeof(info));
+    info.interp                = interp;
+    info.status                = JULE_ERR_MUST_FOLLOW_IF;
+    info.location.line         = value->line;
+    info.location.col          = value->col;
+    if (interp->cur_file != NULL) { info.file = jule_charptr_dup(jule_get_string(interp, interp->cur_file)->chars); }
+    jule_error(interp, &info);
+}
+
 #define STATUS_ERR_RET(_interp, _status)       \
 do {                                           \
     if ((_status) != JULE_SUCCESS) {           \
@@ -1778,6 +1986,7 @@ static void jule_push_tree(Jule_Parse_Context *cxt) {
     value->line        = cxt->line;
     value->col         = cxt->col;
     value->eval_values = JULE_ARRAY_INIT;
+    value->eval_values = jule_array_set_aux(value->eval_values, (void*)cxt->interp->cur_file);
 
     cxt->stack = jule_push(cxt->stack, value);
 }
@@ -1798,7 +2007,7 @@ static void jule_ensure_top_is_line_leader(Jule_Parse_Context *cxt) {
     top->line        = value->line;
     top->col         = value->col;
     top->eval_values = jule_push(top->eval_values, value);
-    top->eval_values = jule_array_set_aux(top->eval_values, cxt->interp->cur_file);
+    top->eval_values = jule_array_set_aux(top->eval_values, (void*)cxt->interp->cur_file);
 }
 
 static int jule_consume_comment(Jule_Parse_Context *cxt) {
@@ -2048,6 +2257,8 @@ static void _jule_string_print(Jule_Interp *interp, char **buff, int *len, int *
     Jule_Value         *child;
     Jule_Value         *key;
     Jule_Value        **val;
+    Jule_String_ID      sym;
+    Jule_String_ID      fsym;
     union {
         Jule_Fn         f;
         void           *v;
@@ -2124,18 +2335,64 @@ do {                                            \
             }
             PUSHC('}');
             break;
+        case _JULE_FN:
+            fsym = NULL;
+
+            for (i = jule_len(interp->local_symtab_stack); i > 0; i -= 1) {
+                hash_table_traverse((_Jule_Symbol_Table)jule_elem(interp->local_symtab_stack, i - 1), sym, val) {
+                    if ((*val) == value) {
+                        fsym = sym;
+                        goto found_fsym;
+                    }
+                }
+            }
+            hash_table_traverse(interp->symtab, sym, val) {
+                if ((*val) == value) {
+                    fsym = sym;
+                    goto found_fsym;
+                }
+            }
+            goto print_tree; /* Not sure that this could ever happen, but just to be safe. */
+found_fsym:;
+            snprintf(b, sizeof(b), "<fn@%p> %s", (void*)value, fsym->chars);
+            PUSHS(b);
+            break;
         case _JULE_TREE:
         case _JULE_TREE_LINE_LEADER:
-        case _JULE_FN:
-            _jule_string_print(interp, buff, len, cap, value->eval_values->data[0], ind, flags & ~JULE_NO_QUOTE);
-            for (i = 1; i < jule_len(value->eval_values); i += 1) {
-                PUSHC('\n');
-                _jule_string_print(interp, buff, len, cap, value->eval_values->data[i], ind + 2, flags & ~JULE_NO_QUOTE);
+        case _JULE_LAMBDA:
+print_tree:;
+            if (flags & JULE_MULTILINE) {
+                _jule_string_print(interp, buff, len, cap, value->eval_values->data[0], ind, flags & ~JULE_NO_QUOTE);
+                for (i = 1; i < jule_len(value->eval_values); i += 1) {
+                    PUSHC('\n');
+                    _jule_string_print(interp, buff, len, cap, value->eval_values->data[i], ind + 2, flags & ~JULE_NO_QUOTE);
+                }
+            } else {
+                PUSHC('(');
+                _jule_string_print(interp, buff, len, cap, value->eval_values->data[0], ind, flags & ~JULE_NO_QUOTE);
+                for (i = 1; i < jule_len(value->eval_values); i += 1) {
+                    PUSHC(' ');
+                    _jule_string_print(interp, buff, len, cap, value->eval_values->data[i], 0, flags & ~JULE_NO_QUOTE);
+                }
+                PUSHC(')');
             }
             break;
         case _JULE_BUILTIN_FN:
+            fsym = NULL;
+            hash_table_traverse(interp->symtab, sym, val) {
+                if ((*val)->type == _JULE_BUILTIN_FN
+                &&  (*val)->builtin_fn == value->builtin_fn) {
+
+                    fsym = sym;
+                    break;
+                }
+            }
             prfn.f = value->builtin_fn;
-            snprintf(b, sizeof(b), "<fn@%p>", prfn.v);
+            if (fsym != NULL) {
+                snprintf(b, sizeof(b), "<fn@%p> %s", prfn.v, fsym->chars);
+            } else {
+                snprintf(b, sizeof(b), "<fn@%p>", prfn.v);
+            }
             PUSHS(b);
             break;
         default:
@@ -2275,6 +2532,14 @@ Jule_Value *jule_lookup(Jule_Interp *interp, Jule_String_ID id) {
     return lookup == NULL ? NULL : *lookup;
 }
 
+Jule_Value *jule_lookup_local_only(Jule_Interp *interp, Jule_String_ID id) {
+    Jule_Value **lookup;
+
+    lookup = hash_table_get_val(jule_local_symtab(interp), id);
+
+    return lookup == NULL ? NULL : *lookup;
+}
+
 static Jule_Status jule_install_common(Jule_Interp *interp, _Jule_Symbol_Table symtab, Jule_String_ID id, Jule_Value *val, int local) {
     Jule_Value **lookup;
 
@@ -2372,24 +2637,45 @@ Jule_Status jule_uninstall_local_no_free(Jule_Interp *interp, Jule_String_ID id)
 }
 
 static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value **result);
+static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
+static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
 
 static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value *fn, unsigned n_values, Jule_Value **values, Jule_Value **result) {
-    Jule_Status           status;
-    Jule_String_ID        save_file;
-    Jule_Value           *ev;
-    Jule_Value           *def_tree;
-    Jule_Value           *fn_sym;
-    _Jule_Symbol_Table    local_symtab;
-    unsigned              i;
-    unsigned              n_params;
-    Jule_Value          **params;
-    Jule_Value           *arg_sym;
-    Jule_Value           *arg_val;
-    Jule_Value           *expr;
+    Jule_Status               status;
+    Jule_String_ID            save_file;
+    Jule_Backtrace_Entry     *bt_entry;
+    Jule_Value               *ev;
+    Jule_Value               *def_tree;
+    Jule_Value               *fn_sym;
+    _Jule_Symbol_Table        local_symtab;
+    unsigned                  i;
+    unsigned                  n_params;
+    Jule_Value              **params;
+    Jule_Value               *arg_sym;
+    Jule_Value               *arg_val;
+    Jule_Value               *expr;
+    unsigned                  lambda_params;
+    const Jule_Closure_Info  *closure;
+    Jule_String_ID            cap_sym;
+    Jule_Value              **cap_valp;
+    Jule_Value               *cap_val;
+    Jule_Value                builtin;
+    Jule_Backtrace_Entry     *container_bt_entry;
+    Jule_Value              **container_args;
 
     status = JULE_SUCCESS;
 
+
     save_file = interp->cur_file;
+
+    bt_entry = JULE_MALLOC(sizeof(*bt_entry));
+
+    bt_entry->file = interp->cur_file;
+    bt_entry->fn   = (fn->type == JULE_LIST || fn->type == JULE_OBJECT)
+                        ? tree
+                        : fn;
+
+    interp->backtrace = jule_push(interp->backtrace, bt_entry);
 
     if (fn->type == _JULE_TREE || fn->type == _JULE_TREE_LINE_LEADER) {
         interp->cur_file = fn->eval_values->aux;
@@ -2464,15 +2750,21 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
 
         jule_pushlocal_symtab(interp, local_symtab);
 
-        expr   = jule_elem(fn->eval_values, 2);
-        status = jule_eval(interp, expr, &ev);
-        if (status != JULE_SUCCESS) {
-            jule_pop(interp->local_symtab_stack);
-            jule_free_symtab(local_symtab);
-            *result = NULL;
-            goto out;
+        for (i = 2; i < jule_len(fn->eval_values); i += 1) {
+            expr   = jule_elem(fn->eval_values, i);
+            status = jule_eval(interp, expr, &ev);
+            if (status != JULE_SUCCESS) {
+                jule_pop(interp->local_symtab_stack);
+                jule_free_symtab(local_symtab);
+                *result = NULL;
+                goto out;
+            }
+            if (i == jule_len(fn->eval_values) - 1) {
+                *result = ev;
+            } else {
+                jule_free_value(ev);
+            }
         }
-        *result = ev;
 
         if ((*result)->local) {
             *result = jule_copy_force(*result);
@@ -2487,18 +2779,134 @@ static Jule_Status jule_invoke(Jule_Interp *interp, Jule_Value *tree, Jule_Value
         }
     } else if (fn->type == _JULE_BUILTIN_FN) {
         status = fn->builtin_fn(interp, tree, n_values, values, result);
+    } else if (fn->type == _JULE_LAMBDA) {
+        closure          = fn->eval_values->aux;
+        interp->cur_file = closure->cur_file;
+
+        lambda_params = jule_len(fn->eval_values) > 2;
+
+        if (lambda_params) {
+            def_tree = jule_elem(fn->eval_values, 1);
+
+            if (def_tree->type == _JULE_TREE || def_tree->type == _JULE_TREE_LINE_LEADER) {
+                n_params = jule_len(def_tree->eval_values);
+                params   = (Jule_Value**)def_tree->eval_values->data;
+            } else {
+                status = JULE_ERR_TYPE;
+                jule_make_type_error(interp, def_tree, JULE_SYMBOL, def_tree->type);
+                *result = NULL;
+                goto out;
+            }
+
+            if (n_values != n_params) {
+                status = JULE_ERR_ARITY;
+                jule_make_arity_error(interp, tree, n_params, n_values, 0);
+                *result = NULL;
+                goto out;
+            }
+        } else {
+            n_params = 0;
+            params   = NULL;
+        }
+
+        local_symtab = hash_table_make(Jule_String_ID, Jule_Value_Ptr, jule_string_id_hash);
+
+        hash_table_traverse(closure->captures, cap_sym, cap_valp) {
+            cap_val = jule_copy_force(*cap_valp);
+            status  = jule_install_common(interp, local_symtab, cap_sym, cap_val, 1);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, cap_val, status, cap_sym);
+                goto out;
+            }
+        }
+
+        for (i = 0; i < n_params; i += 1) {
+            arg_sym = params[i];
+            JULE_ASSERT(arg_sym->type == JULE_SYMBOL);
+
+            status = jule_eval(interp, values[i], &ev);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                goto out;
+            }
+
+            arg_val = jule_copy_force(ev);
+            jule_free_value(ev);
+
+            status = jule_install_common(interp, local_symtab, arg_sym->symbol_id, arg_val, 1);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                jule_make_install_error(interp, arg_val, status, arg_sym->symbol_id);
+                goto out;
+            }
+        }
+
+        jule_pushlocal_symtab(interp, local_symtab);
+
+        expr   = jule_elem(fn->eval_values, 1 + lambda_params);
+        status = jule_eval(interp, expr, &ev);
+        if (status != JULE_SUCCESS) {
+            jule_pop(interp->local_symtab_stack);
+            jule_free_symtab(local_symtab);
+            *result = NULL;
+            goto out;
+        }
+        *result = ev;
+
+        if ((*result)->local) {
+            *result = jule_copy_force(*result);
+        }
+
+        status = jule_pop_local_symtab(interp, tree);
+        if (status != JULE_SUCCESS) {
+            *result = NULL;
+            goto out;
+        }
+    } else if (fn->type == JULE_LIST || fn->type == JULE_OBJECT) {
+        builtin.type = _JULE_BUILTIN_FN;
+        builtin.line = fn->line;
+        builtin.col  = fn->col;
+
+        if (fn->type == JULE_LIST) {
+            builtin.builtin_fn = jule_builtin_elem;
+        } else if (fn->type == JULE_OBJECT) {
+            builtin.builtin_fn = jule_builtin_field;
+        }
+
+        container_bt_entry = JULE_MALLOC(sizeof(*container_bt_entry));
+
+        container_bt_entry->file = interp->cur_file;
+        container_bt_entry->fn   = &builtin;
+
+        container_args    = alloca(sizeof(*container_args) * (n_values + 1));
+        container_args[0] = fn;
+        memcpy(container_args + 1, values, sizeof(*container_args) * n_values);
+
+        interp->backtrace = jule_push(interp->backtrace, container_bt_entry);
+
+        status = builtin.builtin_fn(interp, tree, n_values + 1, container_args, result);
+
+        jule_pop(interp->backtrace);
+        JULE_FREE(container_bt_entry);
     } else {
-        JULE_ASSERT(0);
+        status = JULE_ERR_BAD_INVOKE;
+        jule_make_bad_invoke_error(interp, fn, fn->type);
+        goto out;
     }
 
 out:;
 
+    interp->last_popped_builtin_fn = bt_entry->fn->type == _JULE_BUILTIN_FN
+                                        ? bt_entry->fn->builtin_fn
+                                        : NULL;
+
+    jule_pop(interp->backtrace);
+    JULE_FREE(bt_entry);
+
     interp->cur_file = save_file;
     return status;
 }
-
-static Jule_Status jule_builtin_elem(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
-static Jule_Status jule_builtin_field(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result);
 
 static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value **result) {
     Jule_Status   status;
@@ -2506,7 +2914,6 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
     Jule_Value   *fn;
     Jule_Value  **arg_values;
     unsigned      n_args;
-    Jule_Value    builtin;
 
     status  = JULE_SUCCESS;
     *result = NULL;
@@ -2543,6 +2950,7 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
                     goto out;
                 case _JULE_FN:
                 case _JULE_BUILTIN_FN:
+                case _JULE_LAMBDA:
                     fn          = lookup;
                     arg_values  = NULL;
                     n_args      = 0;
@@ -2579,38 +2987,14 @@ static Jule_Status jule_eval(Jule_Interp *interp, Jule_Value *value, Jule_Value 
             switch (fn->type) {
                 case _JULE_FN:
                 case _JULE_BUILTIN_FN:
+                case _JULE_LAMBDA:
+                case JULE_LIST:
+                case JULE_OBJECT:
                     arg_values = (Jule_Value**)value->eval_values->data + 1;
                     n_args     = jule_len(value->eval_values) - 1;
                     break;
 
-                case JULE_LIST:
-                    if (jule_len(value->eval_values) != 2) { goto notafn; }
-
-                    memcpy(&builtin, fn, sizeof(builtin));
-                    builtin.type       = _JULE_BUILTIN_FN;
-                    builtin.builtin_fn = jule_builtin_elem;
-
-                    fn = &builtin;
-
-                    arg_values = (Jule_Value**)value->eval_values->data;
-                    n_args     = jule_len(value->eval_values);
-                    break;
-
-                case JULE_OBJECT:
-                    if (jule_len(value->eval_values) != 2) { goto notafn; }
-
-                    memcpy(&builtin, fn, sizeof(builtin));
-                    builtin.type       = _JULE_BUILTIN_FN;
-                    builtin.builtin_fn = jule_builtin_field;
-
-                    fn = &builtin;
-
-                    arg_values = (Jule_Value**)value->eval_values->data;
-                    n_args     = jule_len(value->eval_values);
-                    break;
-
                 default:;
-notafn:;
                     status = JULE_ERR_BAD_INVOKE;
                     jule_make_bad_invoke_error(interp, value, fn->type);
                     *result = NULL;
@@ -2624,9 +3008,11 @@ invoke:;
 
             status = jule_invoke(interp, value, fn, n_args, arg_values, result);
             if (status != JULE_SUCCESS) {
+                jule_free_value(fn);
                 *result = NULL;
                 goto out;
             }
+            jule_free_value(fn);
             break;
 
         default:
@@ -2770,6 +3156,24 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_eval(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *val;
+
+    status = jule_args(interp, tree, "*", n_values, values, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    status = jule_eval(interp, val, result);
+
+    jule_free_value(val);
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_set(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *sym;
@@ -2793,11 +3197,13 @@ static Jule_Status jule_builtin_set(Jule_Interp *interp, Jule_Value *tree, unsig
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
-    *result = sym;
+    *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2826,11 +3232,13 @@ static Jule_Status jule_builtin_local(Jule_Interp *interp, Jule_Value *tree, uns
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
-    *result = sym;
+    *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2859,11 +3267,13 @@ static Jule_Status jule_builtin_eset(Jule_Interp *interp, Jule_Value *tree, unsi
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
-    *result = sym;
+    *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2892,11 +3302,13 @@ static Jule_Status jule_builtin_elocal(Jule_Interp *interp, Jule_Value *tree, un
         *result = NULL;
         jule_make_install_error(interp, tree, status, sym->symbol_id);
         jule_free_value(val);
-        jule_free_value(sym);
-        goto out;
+        goto out_free;
     }
 
-    *result = sym;
+    *result = val;
+
+out_free:;
+    jule_free_value(sym);
 
 out:;
     return status;
@@ -2911,9 +3323,9 @@ static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, unsign
 
     status = JULE_SUCCESS;
 
-    if (n_values != 2) {
+    if (n_values < 2) {
         status = JULE_ERR_ARITY;
-        jule_make_arity_error(interp, tree, 2, n_values, 0);
+        jule_make_arity_error(interp, tree, 2, n_values, 1);
         *result = NULL;
         goto out;
     }
@@ -2947,11 +3359,10 @@ static Jule_Status jule_builtin_fn(Jule_Interp *interp, Jule_Value *tree, unsign
         *result = NULL;
         jule_make_install_error(interp, sym, status, sym->symbol_id);
         jule_free_value(fn);
-        jule_free_value(sym);
         goto out;
     }
 
-    *result = jule_copy(sym);
+    *result = fn;
 
 out:;
     return status;
@@ -2966,9 +3377,9 @@ static Jule_Status jule_builtin_localfn(Jule_Interp *interp, Jule_Value *tree, u
 
     status = JULE_SUCCESS;
 
-    if (n_values != 2) {
+    if (n_values < 2) {
         status = JULE_ERR_ARITY;
-        jule_make_arity_error(interp, tree, 2, n_values, 0);
+        jule_make_arity_error(interp, tree, 2, n_values, 1);
         *result = NULL;
         goto out;
     }
@@ -3002,11 +3413,115 @@ static Jule_Status jule_builtin_localfn(Jule_Interp *interp, Jule_Value *tree, u
         *result = NULL;
         jule_make_install_error(interp, sym, status, sym->symbol_id);
         jule_free_value(fn);
-        jule_free_value(sym);
         goto out;
     }
 
-    *result = jule_copy(sym);
+    *result = fn;
+
+out:;
+    return status;
+}
+
+static void _jule_collect_lambda_free_variables(Jule_Interp *interp, Jule_Value *tree, Jule_Array *bounds, Jule_Array **frees) {
+    Jule_Value *it;
+    Jule_Value *first;
+
+    switch (tree->type) {
+        case JULE_SYMBOL:
+            FOR_EACH(bounds, it) {
+                if (tree->symbol_id == it->symbol_id) { return; }
+            }
+            FOR_EACH(*frees, it) {
+                if (tree->symbol_id == it->symbol_id) { return; }
+            }
+
+            *frees = jule_push(*frees, tree);
+            break;
+
+        case _JULE_TREE:
+        case _JULE_TREE_LINE_LEADER:
+            first = jule_elem(tree->eval_values, 0);
+
+            if (first->type == JULE_SYMBOL
+            &&  ( first->symbol_id == jule_get_string_id(interp, "lambda")
+               || first->symbol_id == jule_get_string_id(interp, "fn")
+               || first->symbol_id == jule_get_string_id(interp, "localfn")
+               || first->symbol_id == jule_get_string_id(interp, "quote"))) {
+
+                /* Skip these forms. */
+                return;
+            } else {
+                FOR_EACH(tree->eval_values, it) {
+                    _jule_collect_lambda_free_variables(interp, it, bounds, frees);
+                }
+            }
+            break;
+    }
+}
+
+static Jule_Status jule_builtin_lambda(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status        status;
+    Jule_Value        *def_tree;
+    Jule_Array        *bounds = JULE_ARRAY_INIT;
+    Jule_Value        *it;
+    Jule_Value        *fn;
+    Jule_Closure_Info *closure;
+    Jule_Array        *frees = JULE_ARRAY_INIT;
+    Jule_Value        *lookup;
+
+    status = JULE_SUCCESS;
+
+    if (n_values < 1 || n_values > 2) {
+        status = JULE_ERR_ARITY;
+        jule_make_arity_error(interp, tree, 2 - (n_values == 1), n_values, 1 - (n_values == 2));
+        *result = NULL;
+        goto out;
+    }
+
+    if (n_values == 2) {
+        def_tree = values[0];
+
+        if (def_tree->type == _JULE_TREE) {
+            FOR_EACH(def_tree->eval_values, it) {
+                if (it->type != JULE_SYMBOL) {
+                    status = JULE_ERR_TYPE;
+                    jule_make_type_error(interp, def_tree, JULE_SYMBOL, it->type);
+                    *result = NULL;
+                    goto out;
+                }
+                bounds = jule_push(bounds, it);
+            }
+        } else {
+            status = JULE_ERR_TYPE;
+            jule_make_type_error(interp, def_tree, _JULE_TREE, def_tree->type);
+            *result = NULL;
+            goto out;
+        }
+    }
+
+    fn       = jule_copy(tree);
+    fn->type = _JULE_LAMBDA;
+
+    closure = JULE_MALLOC(sizeof(*closure));
+
+    closure->cur_file = fn->eval_values->aux;
+    closure->captures = hash_table_make(Jule_String_ID, Jule_Value_Ptr, jule_string_id_hash);
+
+    _jule_collect_lambda_free_variables(interp, values[n_values == 2], bounds, &frees);
+
+    FOR_EACH(frees, it) {
+        lookup = jule_lookup(interp, it->symbol_id);
+        if (lookup != NULL) {
+            hash_table_insert(closure->captures, it->symbol_id, jule_copy_force(lookup));
+        }
+    }
+
+    jule_free_array(frees);
+    jule_free_array(bounds);
+
+    fn->eval_values = jule_array_set_aux(fn->eval_values, closure);
+
+    *result = fn;
 
 out:;
     return status;
@@ -3165,6 +3680,30 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_idiv(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *a;
+    Jule_Value  *b;
+
+    status = jule_args(interp, tree, "nn", n_values, values, &a, &b);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (b->number == 0) {
+        *result = jule_number_value(0);
+    } else {
+        *result = jule_number_value((long long)a->number / (long long)b->number);
+    }
+
+    jule_free_value(a);
+    jule_free_value(b);
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_mod(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *a;
@@ -3189,7 +3728,7 @@ out:;
     return status;
 }
 
-static Jule_Status jule_builtin_floor(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+static Jule_Status jule_builtin_inc(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *a;
 
@@ -3199,8 +3738,9 @@ static Jule_Status jule_builtin_floor(Jule_Interp *interp, Jule_Value *tree, uns
         goto out;
     }
 
+    *result = jule_number_value(a->number);
 
-    *result = jule_number_value(floor(a->number));
+    a->number += 1;
 
     jule_free_value(a);
 
@@ -3208,7 +3748,7 @@ out:;
     return status;
 }
 
-static Jule_Status jule_builtin_ceil(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+static Jule_Status jule_builtin_dec(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *a;
 
@@ -3218,31 +3758,11 @@ static Jule_Status jule_builtin_ceil(Jule_Interp *interp, Jule_Value *tree, unsi
         goto out;
     }
 
+    *result = jule_number_value(a->number);
 
-    *result = jule_number_value(ceil(a->number));
-
-    jule_free_value(a);
-
-out:;
-    return status;
-}
-
-static Jule_Status jule_builtin_pow(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
-    Jule_Status  status;
-    Jule_Value  *a;
-    Jule_Value  *b;
-
-    status = jule_args(interp, tree, "nn", n_values, values, &a, &b);
-    if (status != JULE_SUCCESS) {
-        *result = NULL;
-        goto out;
-    }
-
-
-    *result = jule_number_value(pow(a->number, b->number));
+    a->number -= 1;
 
     jule_free_value(a);
-    jule_free_value(b);
 
 out:;
     return status;
@@ -3736,6 +4256,143 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_num_fmt(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *fmt;
+    Jule_Value  *val;
+    char         fbuff[128];
+    char         buff[128];
+
+    status = jule_args(interp, tree, "sn", n_values, values, &fmt, &val);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    snprintf(fbuff, sizeof(fbuff), "%%%s", jule_get_string(interp, fmt->string_id)->chars);
+    snprintf(buff, sizeof(buff), fbuff, val->number);
+
+    *result = jule_string_value(interp, buff);
+
+    jule_free_value(fmt);
+    jule_free_value(val);
+
+out:;
+    return status;
+}
+
+
+static Jule_Status jule_builtin_parse_int(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *s;
+    long long    i;
+
+    status = jule_args(interp, tree, "s", n_values, values, &s);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (sscanf(jule_get_string(interp, s->string_id)->chars, "%lld", &i) == 1) {
+        *result = jule_number_value(i);
+    } else {
+        *result = jule_nil_value();
+    }
+
+    jule_free_value(s);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_parse_hex(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status         status;
+    Jule_Value         *s;
+    unsigned long long  i;
+
+    status = jule_args(interp, tree, "s", n_values, values, &s);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (sscanf(jule_get_string(interp, s->string_id)->chars, "%llx", &i) == 1) {
+        *result = jule_number_value(i);
+    } else {
+        *result = jule_nil_value();
+    }
+
+    jule_free_value(s);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_parse_float(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *s;
+    double       d;
+
+    status = jule_args(interp, tree, "s", n_values, values, &s);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (sscanf(jule_get_string(interp, s->string_id)->chars, "%lg", &d) == 1) {
+        *result = jule_number_value(d);
+    } else {
+        *result = jule_nil_value();
+    }
+
+    jule_free_value(s);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_select(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *cond;
+    Jule_Value  *then;
+
+    status = JULE_SUCCESS;
+
+    if (n_values != 3) {
+        status = JULE_ERR_ARITY;
+        jule_make_arity_error(interp, tree, 3, n_values, 0);
+        *result = NULL;
+        goto out;
+    }
+
+    status = jule_eval(interp, values[0], &cond);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    if (cond->type != JULE_NUMBER) {
+        status = JULE_ERR_TYPE;
+        jule_make_type_error(interp, cond, JULE_NUMBER, cond->type);
+        goto out_free_cond;
+    }
+
+    then   = values[1 + (cond->number == 0)];
+    status = jule_eval(interp, then, &then);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out_free_cond;
+    }
+
+    *result = then;
+
+out_free_cond:;
+    jule_free_value(cond);
+
+out:;
+    return status;
+}
+
 static Jule_Status jule_builtin_do(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     unsigned     i;
@@ -3781,14 +4438,16 @@ out:;
 static Jule_Status jule_builtin_if(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *cond;
-    unsigned     which;
-    Jule_Value  *then;
+    unsigned     truth;
+    unsigned     i;
+    Jule_Value  *it;
+    Jule_Value  *ev;
 
     status = JULE_SUCCESS;
 
-    if (n_values < 2 || n_values > 3) {
+    if (n_values < 2) {
         status = JULE_ERR_ARITY;
-        jule_make_arity_error(interp, tree, n_values < 2 ? 2 : 3, n_values, n_values < 2);
+        jule_make_arity_error(interp, tree, 2, n_values, 2);
         *result = NULL;
         goto out;
     }
@@ -3805,20 +4464,33 @@ static Jule_Status jule_builtin_if(Jule_Interp *interp, Jule_Value *tree, unsign
         goto out_free_cond;
     }
 
+    truth = !!(long long)cond->number;
 
-    which = 1 + (cond->number == 0);
+    if (truth) {
+        for (i = 1; i < n_values; i += 1) {
+            it     = values[i];
+            status = jule_eval(interp, it, &ev);
+            if (status != JULE_SUCCESS) {
+                if (*result != NULL) {
+                    jule_free_value(*result);
+                }
+                *result = NULL;
+                goto out_free_cond;
+            }
 
-    if (which < n_values) {
-        then   = values[which];
-        status = jule_eval(interp, then, &then);
-        if (status != JULE_SUCCESS) {
-            *result = NULL;
-            goto out_free_cond;
+            if (i == n_values - 1) {
+                *result = ev;
+            } else {
+                jule_free_value(ev);
+            }
         }
-        *result = then;
-    } else {
-        *result = jule_number_value(0);
     }
+
+    if (*result == NULL) {
+        *result = jule_nil_value();
+    }
+
+    interp->last_if_was_true = truth;
 
 out_free_cond:;
     jule_free_value(cond);
@@ -3827,27 +4499,155 @@ out:;
     return status;
 }
 
+static Jule_Status jule_builtin_elif(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *cond;
+    unsigned     truth;
+    unsigned     i;
+    Jule_Value  *it;
+    Jule_Value  *ev;
+
+    status = JULE_SUCCESS;
+
+    if (interp->last_popped_builtin_fn != jule_builtin_if
+    &&  interp->last_popped_builtin_fn != jule_builtin_elif) {
+        status  = JULE_ERR_MUST_FOLLOW_IF;
+        *result = NULL;
+        jule_make_must_follow_if_error(interp, tree);
+        goto out;
+    }
+
+    if (n_values < 2) {
+        status = JULE_ERR_ARITY;
+        jule_make_arity_error(interp, tree, 2, n_values, 2);
+        *result = NULL;
+        goto out;
+    }
+
+    if (!interp->last_if_was_true) {
+        status = jule_eval(interp, values[0], &cond);
+        if (status != JULE_SUCCESS) {
+            *result = NULL;
+            goto out;
+        }
+
+        if (cond->type != JULE_NUMBER) {
+            status = JULE_ERR_TYPE;
+            jule_make_type_error(interp, cond, JULE_NUMBER, cond->type);
+            goto out_free_cond;
+        }
+
+        truth = !!(long long)cond->number;
+
+        if (truth) {
+            for (i = 1; i < n_values; i += 1) {
+                it     = values[i];
+                status = jule_eval(interp, it, &ev);
+                if (status != JULE_SUCCESS) {
+                    if (*result != NULL) {
+                        jule_free_value(*result);
+                    }
+                    *result = NULL;
+                    goto out_free_cond;
+                }
+
+                if (i == n_values - 1) {
+                    *result = ev;
+                } else {
+                    jule_free_value(ev);
+                }
+            }
+        }
+
+        interp->last_if_was_true = truth;
+
+out_free_cond:;
+        jule_free_value(cond);
+    }
+
+    if (*result == NULL) {
+        *result = jule_nil_value();
+    }
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_else(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    unsigned     i;
+    Jule_Value  *it;
+    Jule_Value  *ev;
+
+    status  = JULE_SUCCESS;
+    *result = NULL;
+
+    if (interp->last_popped_builtin_fn != jule_builtin_if
+    &&  interp->last_popped_builtin_fn != jule_builtin_elif) {
+        status  = JULE_ERR_MUST_FOLLOW_IF;
+        *result = NULL;
+        jule_make_must_follow_if_error(interp, tree);
+        goto out;
+    }
+
+    if (n_values < 1) {
+        status = JULE_ERR_ARITY;
+        jule_make_arity_error(interp, tree, 1, n_values, 1);
+        *result = NULL;
+        goto out;
+    }
+
+    if (!interp->last_if_was_true) {
+        for (i = 0; i < n_values; i += 1) {
+            it     = values[i];
+            status = jule_eval(interp, it, &ev);
+            if (status != JULE_SUCCESS) {
+                if (*result != NULL) {
+                    jule_free_value(*result);
+                }
+                *result = NULL;
+                goto out;
+            }
+
+            if (i == n_values - 1) {
+                *result = ev;
+            } else {
+                jule_free_value(ev);
+            }
+        }
+    }
+
+    if (*result == NULL) {
+        *result = jule_nil_value();
+    }
+
+out:;
+    return status;
+}
+
+
 static Jule_Status jule_builtin_while(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status  status;
     Jule_Value  *_cond;
-    Jule_Value  *_expr;
     Jule_Value  *expr;
     Jule_Value  *cond;
     int          cont;
+    unsigned     i;
+    Jule_Value  *_expr;
+    Jule_Value  *expr_cpy;
 
     status = JULE_SUCCESS;
 
     *result = NULL;
 
-    if (n_values != 2) {
+    if (n_values < 2) {
         status = JULE_ERR_ARITY;
-        jule_make_arity_error(interp, tree, 2, n_values, 0);
+        jule_make_arity_error(interp, tree, 2, n_values, 1);
         *result = NULL;
         goto out;
     }
 
     _cond = values[0];
-    _expr = values[1];
     expr  = NULL;
 
     for (;;) {
@@ -3879,83 +4679,25 @@ static Jule_Status jule_builtin_while(Jule_Interp *interp, Jule_Value *tree, uns
             jule_free_value(expr);
         }
 
-        status = jule_eval(interp, _expr, &expr);
-        if (status != JULE_SUCCESS) {
-            *result = NULL;
-            goto out;
-        }
-    }
-
-out:;
-    return status;
-}
-
-static Jule_Status jule_builtin_repeat(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
-    Jule_Status  status;
-    Jule_Value  *sym;
-    Jule_Value  *times;
-    Jule_Value  *_expr;
-    int          iters;
-    int          i;
-    Jule_Value  *val;
-    Jule_Value  *expr;
-
-    *result = NULL;
-
-    status = jule_args(interp, tree, "-$n-*", n_values, values, &sym, &times, &_expr);
-    if (status != JULE_SUCCESS) {
-        *result = NULL;
-        goto out;
-    }
-
-    iters = (int)times->number;
-
-    for (i = 0; i < iters; i += 1) {
-        val = jule_number_value(i);
-        status = jule_install_local(interp, sym->symbol_id, val);
-        if (status != JULE_SUCCESS) {
-            *result = NULL;
-            jule_make_install_error(interp, sym, status, sym->symbol_id);
-            goto out;
-        }
-
-        status = jule_eval(interp, _expr, &expr);
-        if (status != JULE_SUCCESS) {
-            jule_uninstall_local(interp, sym->symbol_id);
-            *result = NULL;
-            goto out_free;
-        }
-
-        if (i < (iters - 1)) {
-            jule_free_value(expr);
-        } else {
-            *result = expr;
-        }
-
-        if (*result == val) {
-            status = jule_uninstall_local_no_free(interp, sym->symbol_id);
-        } else {
-            status = jule_uninstall_local(interp, sym->symbol_id);
-        }
-
-        if (status != JULE_SUCCESS) {
-            if (*result != NULL) {
-                jule_free_value(*result);
+        for (i = 1; i < n_values; i += 1) {
+            _expr  = values[i];
+            status = jule_eval(interp, _expr, &expr);
+            if (status != JULE_SUCCESS) {
+                *result = NULL;
+                goto out;
             }
-            *result = NULL;
-            jule_make_install_error(interp, sym, status, sym->symbol_id);
-            goto out_free;
+
+            if (i < n_values - 1) {
+                jule_free_value(expr);
+                expr = NULL;
+            }
         }
-    }
 
-    if (*result == NULL) {
-        *result = jule_nil_value();
+        /* Get a copy of the resulting value that we know can't be deleted while running the condition expression. */
+        expr_cpy = jule_copy_force(expr);
+        jule_free_value(expr);
+        expr = expr_cpy;
     }
-
-out_free:;
-    jule_free_value(times);
-    jule_free_value(sym);
-    jule_free_value(_expr);
 
 out:;
     return status;
@@ -3964,19 +4706,38 @@ out:;
 static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
     Jule_Status   status;
     Jule_Value   *sym;
+    Jule_Value   *_container;
     Jule_Value   *container;
     Jule_Value   *expr;
+    unsigned      i;
+    unsigned      j;
     Jule_Value   *it;
     Jule_Value   *ev;
     Jule_Value  **val;
-    unsigned      i;
 
     *result = NULL;
 
-    status = jule_args(interp, tree, "-$#-*", n_values, values, &sym, &container, &expr);
+    if (n_values < 3) {
+        status = JULE_ERR_ARITY;
+        jule_make_arity_error(interp, tree, 3, n_values, 1);
+        *result = NULL;
+        goto out;
+    }
+
+    sym        = values[0];
+    _container = values[1];
+
+    status = jule_eval(interp, _container, &container);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
+    }
+
+    if (container->type != JULE_LIST
+    &&  container->type != JULE_OBJECT) {
+        status = JULE_ERR_TYPE;
+        jule_make_type_error(interp, container, _JULE_LIST_OR_OBJECT, container->type);
+        goto out_free;
     }
 
     JULE_BORROW(container);
@@ -3989,15 +4750,23 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, u
             if (status != JULE_SUCCESS) {
                 *result = NULL;
                 jule_make_install_error(interp, sym, status, sym->symbol_id);
-                goto out_free;
+                goto out_unborrow;
             }
 
-            status = jule_eval(interp, expr, &ev);
-            if (status != JULE_SUCCESS) {
+            for (j = 2; j < n_values; j += 1) {
+                expr   = values[j];
+                status = jule_eval(interp, expr, &ev);
+                if (status != JULE_SUCCESS) {
                 JULE_UNBORROWER(it);
                 jule_uninstall_local_no_free(interp, sym->symbol_id);
-                *result = NULL;
-                goto out_free;
+                    *result = NULL;
+                    goto out_unborrow;
+                }
+
+                if (j < n_values - 1) {
+                    jule_free_value(ev);
+                    ev = NULL;
+                }
             }
 
             i += 1;
@@ -4012,11 +4781,13 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, u
             }
 
             JULE_UNBORROWER(it);
-            status = jule_uninstall_local_no_free(interp, sym->symbol_id);
-            if (status != JULE_SUCCESS) {
-                *result = NULL;
-                jule_make_install_error(interp, sym, status, sym->symbol_id);
-                goto out_free;
+            if (jule_lookup_local_only(interp, sym->symbol_id) == it) {
+                status = jule_uninstall_local_no_free(interp, sym->symbol_id);
+                if (status != JULE_SUCCESS) {
+                    *result = NULL;
+                    jule_make_install_error(interp, sym, status, sym->symbol_id);
+                    goto out_unborrow;
+                }
             }
         }
 
@@ -4030,15 +4801,23 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, u
             if (status != JULE_SUCCESS) {
                 *result = NULL;
                 jule_make_install_error(interp, sym, status, sym->symbol_id);
-                goto out_free;
+                goto out_unborrow;
             }
 
-            status = jule_eval(interp, expr, &ev);
-            if (status != JULE_SUCCESS) {
+            for (j = 2; j < n_values; j += 1) {
+                expr   = values[j];
+                status = jule_eval(interp, expr, &ev);
+                if (status != JULE_SUCCESS) {
                 JULE_UNBORROWER(it);
                 jule_uninstall_local_no_free(interp, sym->symbol_id);
-                *result = NULL;
-                goto out_free;
+                    *result = NULL;
+                    goto out_unborrow;
+                }
+
+                if (j < n_values - 1) {
+                    jule_free_value(ev);
+                    ev = NULL;
+                }
             }
 
             i += 1;
@@ -4053,11 +4832,13 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, u
             }
 
             JULE_UNBORROWER(it);
-            status = jule_uninstall_local_no_free(interp, sym->symbol_id);
-            if (status != JULE_SUCCESS) {
-                *result = NULL;
-                jule_make_install_error(interp, sym, status, sym->symbol_id);
-                goto out_free;
+            if (jule_lookup_local_only(interp, sym->symbol_id) == it) {
+                status = jule_uninstall_local_no_free(interp, sym->symbol_id);
+                if (status != JULE_SUCCESS) {
+                    *result = NULL;
+                    jule_make_install_error(interp, sym, status, sym->symbol_id);
+                    goto out_unborrow;
+                }
             }
         }
     }
@@ -4066,13 +4847,11 @@ static Jule_Status jule_builtin_foreach(Jule_Interp *interp, Jule_Value *tree, u
         *result = jule_nil_value();
     }
 
-
-out_free:;
+out_unborrow:;
     JULE_UNBORROW(container);
 
-    jule_free_value(sym);
+out_free:;
     jule_free_value(container);
-    jule_free_value(expr);
 
 out:;
     return status;
@@ -4114,6 +4893,44 @@ static Jule_Status jule_builtin_list(Jule_Interp *interp, Jule_Value *tree, unsi
 
 out_free:;
     jule_free_value(list);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_range(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *beg;
+    Jule_Value  *end;
+    Jule_Value  *list;
+    long long    i;
+
+    (void)tree;
+
+    status = JULE_SUCCESS;
+
+    status = jule_args(interp, tree, "nn", n_values, values, &beg, &end);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    list = jule_list_value();
+
+    if ((long long)beg->number <= (long long)end->number) {
+        for (i = (long long)beg->number; i < (long long)end->number; i += 1) {
+            list->list = jule_push(list->list, jule_number_value(i));
+        }
+    } else {
+        for (i = (long long)beg->number; i > (long long)end->number; i -= 1) {
+            list->list = jule_push(list->list, jule_number_value(i));
+        }
+    }
+
+    *result = list;
+
+    jule_free_value(beg);
+    jule_free_value(end);
 
 out:;
     return status;
@@ -4769,39 +5586,174 @@ out:;
     return status;
 }
 
-static Jule_Status jule_builtin_iso_date(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
-    int         status;
-    Jule_Value *s;
-    struct tm   tm;
-    const char *weekdays[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+static Jule_Status jule_builtin_map(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *f;
+    Jule_Value  *list;
+    Jule_Value  *t;
+    Jule_Value  *mapped;
+    Jule_Value  *it;
+    Jule_Value  *ev;
 
-    status = jule_args(interp, tree, "s", n_values, values, &s);
+    status = jule_args(interp, tree, "*l", n_values, values, &f, &list);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         goto out;
     }
 
-    memset(&tm, 0, sizeof(tm));
-    if (strptime(jule_get_string(interp, s->string_id)->chars, "%FT%T%z", &tm) == NULL) {
-        *result = jule_nil_value();
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
+
+    mapped = jule_list_value();
+
+    FOR_EACH(list->list, it) {
+        status = jule_invoke(interp, t, f, 1, &it, &ev);
+        if (status != JULE_SUCCESS) {
+            jule_free_value(mapped);
+            *result = NULL;
+            goto out_free;
+        }
+        if (ev->in_symtab || ev->borrower_count) {
+            /* Make sure we get a value that can be owned by our new list. */
+            ev = jule_copy_force(ev);
+        }
+        mapped->list = jule_push(mapped->list, ev);
+    }
+
+    *result = mapped;
+
+out_free:;
+    jule_free_value(list);
+    jule_free_value(f);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_filter(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *f;
+    Jule_Value  *list;
+    Jule_Value  *t;
+    Jule_Value  *filtered;
+    Jule_Value  *it;
+    Jule_Value  *ev;
+
+    status = jule_args(interp, tree, "*l", n_values, values, &f, &list);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
+
+    filtered = jule_list_value();
+
+    FOR_EACH(list->list, it) {
+        status = jule_invoke(interp, t, f, 1, &it, &ev);
+        if (status != JULE_SUCCESS) {
+            jule_free_value(filtered);
+            *result = NULL;
+            goto out_free;
+        }
+        if (ev->type != JULE_NUMBER) {
+            status = JULE_ERR_TYPE;
+            jule_make_type_error(interp, ev, JULE_NUMBER, ev->type);
+            jule_free_value(ev);
+            jule_free_value(filtered);
+            *result = NULL;
+            goto out_free;
+        }
+        if (ev->number != 0) {
+            filtered->list = jule_push(filtered->list, jule_copy_force(it));
+        }
+        jule_free_value(ev);
+    }
+
+    *result = filtered;
+
+out_free:;
+    jule_free_value(list);
+    jule_free_value(f);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_reduce(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *f;
+    Jule_Value  *acc;
+    Jule_Value  *list;
+    Jule_Value  *t;
+    Jule_Value  *it;
+    Jule_Value  *arg_pass[2];
+    Jule_Value  *ev;
+
+    status = jule_args(interp, tree, "**l", n_values, values, &f, &acc, &list);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
+
+    FOR_EACH(list->list, it) {
+        arg_pass[0] = acc;
+        arg_pass[1] = it;
+        status = jule_invoke(interp, t, f, 2, arg_pass, &ev);
+        if (status != JULE_SUCCESS) {
+            jule_free_value(acc);
+            *result = NULL;
+            goto out_free;
+        }
+        jule_free_value(acc);
+        acc = ev;
+    }
+
+    *result = acc;
+
+out_free:;
+    jule_free_value(list);
+    jule_free_value(f);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_apply(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *f;
+    Jule_Value  *list;
+    Jule_Value  *t;
+    Jule_Value  *ev;
+
+    status = jule_args(interp, tree, "*l", n_values, values, &f, &list);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    t = ((tree->type == _JULE_TREE || tree->type == _JULE_TREE_LINE_LEADER) && jule_len(tree->eval_values) > 1)
+            ? jule_elem(tree->eval_values, 1)
+            : tree;
+
+    status = jule_invoke(interp, t, f, jule_len(list->list), (Jule_Value**)list->list->data, &ev);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
         goto out_free;
     }
 
-    *result = jule_object_value();
-
-    jule_insert(*result, jule_string_value(interp, "seconds"), jule_number_value(tm.tm_sec));
-    jule_insert(*result, jule_string_value(interp, "minutes"), jule_number_value(tm.tm_min));
-    jule_insert(*result, jule_string_value(interp, "hours"),   jule_number_value(tm.tm_hour));
-    jule_insert(*result, jule_string_value(interp, "day"),     jule_number_value(tm.tm_mday));
-    jule_insert(*result, jule_string_value(interp, "wday"),    jule_string_value(interp, weekdays[tm.tm_wday % 7]));
-    jule_insert(*result, jule_string_value(interp, "yday"),    jule_number_value(1 + tm.tm_yday));
-    jule_insert(*result, jule_string_value(interp, "month"),   jule_number_value(1 + tm.tm_mon));
-    jule_insert(*result, jule_string_value(interp, "year"),    jule_number_value(1900 + tm.tm_year));
-    jule_insert(*result, jule_string_value(interp, "dst"),     jule_number_value(tm.tm_isdst));
-    jule_insert(*result, jule_string_value(interp, "epoch"),   jule_number_value(mktime(&tm)));
+    *result = ev;
 
 out_free:;
-    jule_free_value(s);
+    jule_free_value(list);
+    jule_free_value(f);
 
 out:;
     return status;
@@ -4828,16 +5780,17 @@ static Jule_Status jule_builtin_eval_file(Jule_Interp *interp, Jule_Value *tree,
     }
 
     pstring = jule_get_string(interp, path->string_id);
+    jule_free_value(path);
 
     status = jule_map_file_into_readonly_memory(pstring->chars, &mem, &size);
     if (status != JULE_SUCCESS) {
         *result = NULL;
         jule_make_file_error(interp, tree, status, pstring->chars);
-        goto out;
+        goto out_free;
     }
 
     save_file        = interp->cur_file;
-    interp->cur_file = path->string_id;
+    interp->cur_file = pstring;
 
     status = jule_parse_nodes(interp, mem, size, &nodes);
     if (status != JULE_SUCCESS) {
@@ -4862,20 +5815,120 @@ static Jule_Status jule_builtin_eval_file(Jule_Interp *interp, Jule_Value *tree,
         }
     }
 
-    if (*result == NULL) {
+    if (*result != NULL) {
+        *result = jule_copy_force(*result);
+    } else {
         *result = jule_nil_value();
     }
 
 out_restore_file:;
     interp->cur_file = save_file;
 
-out:;
-    jule_free_value(path);
+out_free:;
     FOR_EACH(nodes, it) {
         jule_free_value_force(it);
     }
     jule_free_array(nodes);
 
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_use_package(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status        status;
+    Jule_Value        *name;
+    const Jule_String *name_string;
+
+    if (interp->use_package_forbidden) {
+        *result = NULL;
+        status  = JULE_ERR_USE_PACKAGE_FORBIDDEN;
+        jule_make_forbidden_error(interp, tree, status);
+        goto out;
+    }
+
+    status = jule_args(interp, tree, "s", n_values, values, &name);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    name_string = jule_get_string(interp, name->string_id);
+    jule_free_value(name);
+
+    status = jule_load_package(interp, name_string->chars, result);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        jule_make_load_package_error(interp, tree, status, name_string->chars, dlerror());
+        goto out;
+    }
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_add_package_directory(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status        status;
+    Jule_Value        *path;
+    const Jule_String *pstring;
+
+    if (interp->add_package_directory_forbidden) {
+        *result = NULL;
+        status  = JULE_ERR_USE_PACKAGE_FORBIDDEN;
+        jule_make_forbidden_error(interp, tree, status);
+        goto out;
+    }
+
+    status = jule_args(interp, tree, "s", n_values, values, &path);
+    if (status != JULE_SUCCESS) {
+        *result = NULL;
+        goto out;
+    }
+
+    pstring = jule_get_string(interp, path->string_id);
+    jule_free_value(path);
+
+    jule_add_package_directory(interp, pstring->chars);
+
+    *result = jule_string_value(interp, pstring->chars);
+
+out:;
+    return status;
+}
+
+static Jule_Status jule_builtin_exit(Jule_Interp *interp, Jule_Value *tree, unsigned n_values, Jule_Value **values, Jule_Value **result) {
+    Jule_Status  status;
+    Jule_Value  *exit_code;
+    int          code;
+
+    (void)tree;
+
+    *result   = NULL;
+    exit_code = NULL;
+
+    if (n_values >= 1) {
+        status = jule_eval(interp, values[0], &exit_code);
+        if (status != JULE_SUCCESS) {
+            *result = NULL;
+            goto out;
+        }
+
+        if (exit_code->type != JULE_NUMBER) {
+            status = JULE_ERR_TYPE;
+            jule_make_type_error(interp, exit_code, JULE_NUMBER, exit_code->type);
+            goto out_free;
+        }
+    }
+
+    code = exit_code != NULL ? (int)exit_code->number : 0;
+
+    exit(code);
+
+out_free:;
+    if (exit_code != NULL) {
+        jule_free_value(exit_code);
+    }
+
+out:;
     return status;
 }
 
@@ -4913,6 +5966,7 @@ static Jule_Status jule_builtin_len(Jule_Interp *interp, Jule_Value *tree, unsig
             break;
         case _JULE_TREE:
         case _JULE_TREE_LINE_LEADER:
+        case _JULE_LAMBDA:
             *result = jule_number_value(jule_len(ev->eval_values));
             break;
         case _JULE_BUILTIN_FN:
@@ -4961,64 +6015,79 @@ Jule_Status jule_init_interp(Jule_Interp *interp) {
 
 #define JULE_INSTALL_FN(_name, _fn) jule_install_fn(interp, jule_get_string_id(interp, (_name)), (_fn))
 
-    JULE_INSTALL_FN("set",           jule_builtin_set);
-    JULE_INSTALL_FN("local",         jule_builtin_local);
-    JULE_INSTALL_FN("eset",          jule_builtin_eset);
-    JULE_INSTALL_FN("elocal",        jule_builtin_elocal);
-    JULE_INSTALL_FN("fn",            jule_builtin_fn);
-    JULE_INSTALL_FN("localfn",       jule_builtin_localfn);
-    JULE_INSTALL_FN("id",            jule_builtin_id);
-    JULE_INSTALL_FN("quote",         jule_builtin_quote);
-    JULE_INSTALL_FN("+",             jule_builtin_add);
-    JULE_INSTALL_FN("-",             jule_builtin_sub);
-    JULE_INSTALL_FN("*",             jule_builtin_mul);
-    JULE_INSTALL_FN("/",             jule_builtin_div);
-    JULE_INSTALL_FN("%",             jule_builtin_mod);
-    JULE_INSTALL_FN("floor",         jule_builtin_floor);
-    JULE_INSTALL_FN("ceil",          jule_builtin_ceil);
-    JULE_INSTALL_FN("pow",           jule_builtin_pow);
-    JULE_INSTALL_FN("==",            jule_builtin_equ);
-    JULE_INSTALL_FN("!=",            jule_builtin_neq);
-    JULE_INSTALL_FN("<",             jule_builtin_lss);
-    JULE_INSTALL_FN("<=",            jule_builtin_leq);
-    JULE_INSTALL_FN(">",             jule_builtin_gtr);
-    JULE_INSTALL_FN(">=",            jule_builtin_geq);
-    JULE_INSTALL_FN("not",           jule_builtin_not);
-    JULE_INSTALL_FN("and",           jule_builtin_and);
-    JULE_INSTALL_FN("or",            jule_builtin_or);
-    JULE_INSTALL_FN("print",         jule_builtin_print);
-    JULE_INSTALL_FN("println",       jule_builtin_println);
-    JULE_INSTALL_FN("string",        jule_builtin_string);
-    JULE_INSTALL_FN("symbol",        jule_builtin_symbol);
-    JULE_INSTALL_FN("pad",           jule_builtin_pad);
-    JULE_INSTALL_FN("fmt",           jule_builtin_fmt);
-    JULE_INSTALL_FN("do",            jule_builtin_do);
-    JULE_INSTALL_FN("then",          jule_builtin_do);
-    JULE_INSTALL_FN("else",          jule_builtin_do);
-    JULE_INSTALL_FN("if",            jule_builtin_if);
-    JULE_INSTALL_FN("while",         jule_builtin_while);
-    JULE_INSTALL_FN("repeat",        jule_builtin_repeat);
-    JULE_INSTALL_FN("foreach",       jule_builtin_foreach);
-    JULE_INSTALL_FN("list",          jule_builtin_list);
-    JULE_INSTALL_FN(".",             jule_builtin_dot);
-    JULE_INSTALL_FN("elem",          jule_builtin_elem);
-    JULE_INSTALL_FN("index",         jule_builtin_index);
-    JULE_INSTALL_FN("append",        jule_builtin_append);
-    JULE_INSTALL_FN("pop",           jule_builtin_pop);
-    JULE_INSTALL_FN("object",        jule_builtin_object);
-    JULE_INSTALL_FN("in",            jule_builtin_in);
-    JULE_INSTALL_FN("field",         jule_builtin_field);
-    JULE_INSTALL_FN("insert",        jule_builtin_insert);
-    JULE_INSTALL_FN("delete",        jule_builtin_delete);
-    JULE_INSTALL_FN("update-object", jule_builtin_update_object);
-    JULE_INSTALL_FN("erase",         jule_builtin_erase);
-    JULE_INSTALL_FN("len",           jule_builtin_len);
-    JULE_INSTALL_FN("empty",         jule_builtin_empty);
-    JULE_INSTALL_FN("keys",          jule_builtin_keys);
-    JULE_INSTALL_FN("values",        jule_builtin_values);
-    JULE_INSTALL_FN("sorted",        jule_builtin_sorted);
-    JULE_INSTALL_FN("iso-date",      jule_builtin_iso_date);
-    JULE_INSTALL_FN("eval-file",     jule_builtin_eval_file);
+    JULE_INSTALL_FN("eval",                  jule_builtin_eval);
+    JULE_INSTALL_FN("set",                   jule_builtin_set);
+    JULE_INSTALL_FN("local",                 jule_builtin_local);
+    JULE_INSTALL_FN("eset",                  jule_builtin_eset);
+    JULE_INSTALL_FN("elocal",                jule_builtin_elocal);
+    JULE_INSTALL_FN("fn",                    jule_builtin_fn);
+    JULE_INSTALL_FN("localfn",               jule_builtin_localfn);
+    JULE_INSTALL_FN("lambda",                jule_builtin_lambda);
+    JULE_INSTALL_FN("id",                    jule_builtin_id);
+    JULE_INSTALL_FN("`",                     jule_builtin_id);
+    JULE_INSTALL_FN("quote",                 jule_builtin_quote);
+    JULE_INSTALL_FN("'",                     jule_builtin_quote);
+    JULE_INSTALL_FN("+",                     jule_builtin_add);
+    JULE_INSTALL_FN("-",                     jule_builtin_sub);
+    JULE_INSTALL_FN("*",                     jule_builtin_mul);
+    JULE_INSTALL_FN("/",                     jule_builtin_div);
+    JULE_INSTALL_FN("//",                    jule_builtin_idiv);
+    JULE_INSTALL_FN("%",                     jule_builtin_mod);
+    JULE_INSTALL_FN("++",                    jule_builtin_inc);
+    JULE_INSTALL_FN("--",                    jule_builtin_dec);
+    JULE_INSTALL_FN("==",                    jule_builtin_equ);
+    JULE_INSTALL_FN("!=",                    jule_builtin_neq);
+    JULE_INSTALL_FN("<",                     jule_builtin_lss);
+    JULE_INSTALL_FN("<=",                    jule_builtin_leq);
+    JULE_INSTALL_FN(">",                     jule_builtin_gtr);
+    JULE_INSTALL_FN(">=",                    jule_builtin_geq);
+    JULE_INSTALL_FN("not",                   jule_builtin_not);
+    JULE_INSTALL_FN("and",                   jule_builtin_and);
+    JULE_INSTALL_FN("or",                    jule_builtin_or);
+    JULE_INSTALL_FN("print",                 jule_builtin_print);
+    JULE_INSTALL_FN("println",               jule_builtin_println);
+    JULE_INSTALL_FN("string",                jule_builtin_string);
+    JULE_INSTALL_FN("symbol",                jule_builtin_symbol);
+    JULE_INSTALL_FN("pad",                   jule_builtin_pad);
+    JULE_INSTALL_FN("fmt",                   jule_builtin_fmt);
+    JULE_INSTALL_FN("num-fmt",               jule_builtin_num_fmt);
+    JULE_INSTALL_FN("parse-int",             jule_builtin_parse_int);
+    JULE_INSTALL_FN("parse-hex",             jule_builtin_parse_hex);
+    JULE_INSTALL_FN("parse-float",           jule_builtin_parse_float);
+    JULE_INSTALL_FN("do",                    jule_builtin_do);
+    JULE_INSTALL_FN("if",                    jule_builtin_if);
+    JULE_INSTALL_FN("elif",                  jule_builtin_elif);
+    JULE_INSTALL_FN("else",                  jule_builtin_else);
+    JULE_INSTALL_FN("select",                jule_builtin_select);
+    JULE_INSTALL_FN("while",                 jule_builtin_while);
+    JULE_INSTALL_FN("foreach",               jule_builtin_foreach);
+    JULE_INSTALL_FN("list",                  jule_builtin_list);
+    JULE_INSTALL_FN("range",                 jule_builtin_range);
+    JULE_INSTALL_FN(".",                     jule_builtin_dot);
+    JULE_INSTALL_FN("elem",                  jule_builtin_elem);
+    JULE_INSTALL_FN("index",                 jule_builtin_index);
+    JULE_INSTALL_FN("append",                jule_builtin_append);
+    JULE_INSTALL_FN("pop",                   jule_builtin_pop);
+    JULE_INSTALL_FN("object",                jule_builtin_object);
+    JULE_INSTALL_FN("in",                    jule_builtin_in);
+    JULE_INSTALL_FN("field",                 jule_builtin_field);
+    JULE_INSTALL_FN("insert",                jule_builtin_insert);
+    JULE_INSTALL_FN("delete",                jule_builtin_delete);
+    JULE_INSTALL_FN("update-object",         jule_builtin_update_object);
+    JULE_INSTALL_FN("erase",                 jule_builtin_erase);
+    JULE_INSTALL_FN("len",                   jule_builtin_len);
+    JULE_INSTALL_FN("empty",                 jule_builtin_empty);
+    JULE_INSTALL_FN("keys",                  jule_builtin_keys);
+    JULE_INSTALL_FN("values",                jule_builtin_values);
+    JULE_INSTALL_FN("sorted",                jule_builtin_sorted);
+    JULE_INSTALL_FN("map",                   jule_builtin_map);
+    JULE_INSTALL_FN("filter",                jule_builtin_filter);
+    JULE_INSTALL_FN("reduce",                jule_builtin_reduce);
+    JULE_INSTALL_FN("apply",                 jule_builtin_apply);
+    JULE_INSTALL_FN("eval-file",             jule_builtin_eval_file);
+    JULE_INSTALL_FN("use-package",           jule_builtin_use_package);
+    JULE_INSTALL_FN("add-package-directory", jule_builtin_add_package_directory);
+    JULE_INSTALL_FN("exit",                  jule_builtin_exit);
 
 #undef JULE_INSTALL_FN
 
@@ -5049,10 +6118,12 @@ out:;
 }
 
 void jule_free(Jule_Interp *interp) {
-    _Jule_Symbol_Table  symtab;
-    Jule_Value         *it;
-    char               *key;
-    Jule_String_ID     *id;
+    _Jule_Symbol_Table    symtab;
+    Jule_Value           *it;
+    char                 *key;
+    Jule_String_ID       *id;
+    void                 *handle;
+    Jule_Backtrace_Entry *bt;
 
 
     while ((symtab = jule_pop(interp->local_symtab_stack)) != NULL) {
@@ -5061,6 +6132,11 @@ void jule_free(Jule_Interp *interp) {
     jule_free_array(interp->local_symtab_stack);
 
     jule_free_symtab(interp->symtab);
+
+    FOR_EACH(interp->package_values, it) {
+        jule_free_value_force(it);
+    }
+    jule_free_array(interp->package_values);
 
     FOR_EACH(interp->roots, it) {
         jule_free_value_force(it);
@@ -5073,6 +6149,18 @@ void jule_free(Jule_Interp *interp) {
         JULE_FREE((void*)*id);
     }
     hash_table_free(interp->strings);
+
+    FOR_EACH(interp->package_handles, handle) {
+        dlclose(handle);
+    }
+    jule_free_array(interp->package_handles);
+
+    jule_free_array(interp->package_dirs);
+
+    FOR_EACH(interp->backtrace, bt) {
+        JULE_FREE(bt);
+    }
+    jule_free_array(interp->backtrace);
 
     memset(interp, 0, sizeof(*interp));
 }
