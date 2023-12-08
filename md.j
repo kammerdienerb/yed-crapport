@@ -4,12 +4,13 @@ use-package "stats"
 set md:__kwdargs__
     quote
         foreach var (keys KWDARGS)
-            elocal (symbol var) (KWDARGS var)
+            eref (symbol var) (KWDARGS var)
+#             elocal (symbol var) (KWDARGS var)
 
 fn (md:unique-column-values column)
     local values object
     foreach row @table
-        if (and (in row column))
+        if (in row column)
             insert values (row column) nil
     keys values
 
@@ -25,10 +26,7 @@ fn (md:avg-metric KWDARGS)
     if (and donorm (len groups))
         local normgroup (groups 0)
 
-    if (not (in KWDARGS "extraname"))
-        local extraname nil
-
-    localfn (collect-groups groups metric normgroup norm match extraname)
+    localfn (collect-groups groups metric normgroup norm match)
         local out object
 
         if (empty groups)
@@ -98,8 +96,6 @@ fn (md:avg-metric KWDARGS)
                 insert out "error"
                     /   (stats:std normvalues)
                         (math:sqrt (len normvalues))
-            if (!= nil extraname)
-                insert out extraname (out metric)
         else
             local group (groups 0)
             erase groups 0
@@ -109,7 +105,7 @@ fn (md:avg-metric KWDARGS)
                     if (not (in out value))
                         update-object match (object (. group value))
 
-                    insert out value (collect-groups groups metric normgroup norm match extraname)
+                    insert out value (collect-groups groups metric normgroup norm match)
         out
 
-    collect-groups groups metric normgroup (select donorm norm nil) object extraname
+    collect-groups groups metric normgroup (select donorm norm nil) object

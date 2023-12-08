@@ -1123,6 +1123,7 @@ static void jule_error_cb(Jule_Error_Info *info) {
     switch (status) {
         case JULE_ERR_LOOKUP:
         case JULE_ERR_RELEASE_WHILE_BORROWED:
+        case JULE_ERR_MODIFY_WHILE_ITER:
             snprintf(buff, sizeof(buff), " (%s)", info->sym);
             jule_output_cb(buff, strlen(buff));
             break;
