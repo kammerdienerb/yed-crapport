@@ -32,14 +32,14 @@ set plot:__kwdargs__
 
 fn (plot:bar KWDARGS)
     # point-objects: Object with a set of objects to plot. Each element object should have a field "y" (and optionally, "error").
-    # keys:          List of keys in each point object to plot as y values.
+    # ykeys:         List of keys in each point object to plot as y values.
     # order:         List of keys of point-objects, which dicatates the order of plotted points. (optional)
     # legendx:       The legend's x position on a 0.0-1.0 scale. (optional)
     # legendy:       The legend's y position in data scale (i.e. matching your plot points). (optional)
     # color-invert?: Boolean that flips the foreground and background colors. (optional)
     md:__kwdargs__
 
-    local num     (len keys)
+    local num     (len ykeys)
     local single? (== 1 num)
 
     if (not (in KWDARGS "order"))
@@ -74,7 +74,8 @@ fn (plot:bar KWDARGS)
                     . "color"  &fg-color
 
         local j 0
-        foreach y-key keys
+        foreach y-key ykeys
+            println &point
             ref &y (&point y-key)
 
             if (> &y ymax)
@@ -125,7 +126,7 @@ fn (plot:bar KWDARGS)
             local legendy (- 0 (* 0.05 ymax))
 
         local j 0
-        foreach y-key keys
+        foreach y-key ykeys
             append (plot "groups")
                 object
                     . "label"  y-key

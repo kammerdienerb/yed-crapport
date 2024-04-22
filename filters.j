@@ -2,8 +2,13 @@ fn (date-before month day)
     or (< ((date:parse-iso (@row "date")) "month") month)
        (< ((date:parse-iso (@row "date")) "day")   day)
 
-@filter
-    != 14 (@row "cores")
+# @filter
+#     and
+#         == 2024 ((date:parse-iso (@row "date")) "year")
+#         not (date-before 1 13)
+#     and
+#         != 14 (@row "cores")
+#         == nil (@row "fair_weight_regex")
 
 # @filter
 #     or
